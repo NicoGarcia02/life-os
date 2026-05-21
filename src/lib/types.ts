@@ -28,9 +28,8 @@ export interface SleepEntry {
   id: string
   user_id: string
   date: string
-  bedtime: string | null
+  sleep_time: string | null
   wake_time: string | null
-  hours_slept: number | null
   quality: number | null
   created_at: string
 }
@@ -86,7 +85,7 @@ export interface CalendarEvent {
   title: string
   date: string
   time: string | null
-  duration: number
+  duration: number | null
   tag: 'Trabajo' | 'Personal' | 'Salud' | 'Social' | 'Educación'
   created_at: string
 }

@@ -9,7 +9,7 @@ import Btn from '@/components/ui/Btn'
 import Modal from '@/components/ui/Modal'
 import { Input, Textarea, SelectInput } from '@/components/ui/Input'
 import DailyClosingModal from '@/components/DailyClosingModal'
-import { today, formatDate, formatCurrency, calcDailyScore, getContextualMessage, addDays } from '@/lib/utils'
+import { today, formatDate, formatCurrency, calcDailyScore, getContextualMessage, addDays, entryHours } from '@/lib/utils'
 import type { Habit, HabitEntry, SleepEntry, Task, Transaction, CalendarEvent, Note } from '@/lib/types'
 import { useRouter } from 'next/navigation'
 
@@ -83,15 +83,16 @@ export default function DashboardPage() {
     setCategories(catsRes.data ?? [])
 
     // Score history (last 14 days)
+    const activeIds = new Set((habitsRes.data ?? []).map(h => h.id))
+    const habitsTotal = (habitsRes.data ?? []).length
     const history: number[] = []
     for (let i = 13; i >= 0; i--) {
       const day = addDays(t, -i)
-      const dayEntries = (entriesRes.data ?? []).filter(e => e.date === day && e.completed)
-      const habitsTotal = (habitsRes.data ?? []).length
+      const dayEntries = (entriesRes.data ?? []).filter(e => e.date === day && e.completed && activeIds.has(e.habit_id))
       const score = calcDailyScore({
         habitsCompleted: dayEntries.length,
         habitsTotal,
-        sleepHours: i === 1 ? (sleepRes.data?.hours_slept ?? null) : null,
+        sleepHours: i === 1 && sleepRes.data ? entryHours(sleepRes.data) : null,
         tasksCompleted: 0,
         tasksTotal: 0,
       })
@@ -167,7 +168,8 @@ export default function DashboardPage() {
   }
 
   // Computed values
-  const todayEntries = entries.filter(e => e.date === t && e.completed)
+  const activeHabitIds = new Set(habits.map(h => h.id))
+  const todayEntries = entries.filter(e => e.date === t && e.completed && activeHabitIds.has(e.habit_id))
   const habitsCompleted = todayEntries.length
   const habitsTotal = habits.length
   const habitPct = habitsTotal > 0 ? (habitsCompleted / habitsTotal) * 100 : 0
@@ -177,18 +179,18 @@ export default function DashboardPage() {
   const overdueTasks = tasks.filter(task => !task.completed && task.due_date && task.due_date < t)
   const overduePriorityCount = overdueTasks.filter(t => t.priority === 'alta').length
 
-  const now = new Date()
-  const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const monthBalance = transactions.reduce((s, tx) => tx.type === 'ingreso' ? s + tx.amount : s - tx.amount, 0)
+
+  const sleepHours = sleepEntry ? entryHours(sleepEntry) : null
 
   const score = calcDailyScore({
     habitsCompleted, habitsTotal,
-    sleepHours: sleepEntry?.hours_slept ?? null,
+    sleepHours,
     tasksCompleted: completedTodayTasks,
     tasksTotal: todayTasks.length,
   })
 
-  const message = getContextualMessage(overduePriorityCount, sleepEntry?.hours_slept ?? null, habitPct)
+  const message = getContextualMessage(overduePriorityCount, sleepHours, habitPct)
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 400 }}>
@@ -237,10 +239,10 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Sueño anoche"
-          value={sleepEntry?.hours_slept ? `${sleepEntry.hours_slept}h` : '—'}
+          value={sleepHours ? `${sleepHours}h` : '—'}
           trend={sleepEntry ? `Calidad ${sleepEntry.quality}/5` : 'Sin registrar'}
-          trendUp={!!(sleepEntry?.hours_slept && sleepEntry.hours_slept >= 7)}
-          trendDown={!!(sleepEntry?.hours_slept && sleepEntry.hours_slept < 6)}
+          trendUp={!!(sleepHours && sleepHours >= 7)}
+          trendDown={!!(sleepHours && sleepHours < 6)}
           onClick={() => router.push('/sleep')}
         />
         <StatCard
@@ -300,14 +302,14 @@ export default function DashboardPage() {
           {sleepEntry ? (
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 36, fontWeight: 700, fontFamily: 'var(--font-mono)', color: sleepEntry.hours_slept && sleepEntry.hours_slept >= 7 ? 'var(--green)' : sleepEntry.hours_slept && sleepEntry.hours_slept >= 6 ? 'var(--yellow)' : 'var(--red)' }}>
-                  {sleepEntry.hours_slept}h
+                <span style={{ fontSize: 36, fontWeight: 700, fontFamily: 'var(--font-mono)', color: sleepHours && sleepHours >= 7 ? 'var(--green)' : sleepHours && sleepHours >= 6 ? 'var(--yellow)' : 'var(--red)' }}>
+                  {sleepHours}h
                 </span>
                 <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>anoche</span>
               </div>
-              {sleepEntry.bedtime && sleepEntry.wake_time && (
+              {sleepEntry.sleep_time && sleepEntry.wake_time && (
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                  {sleepEntry.bedtime.slice(0,5)} → {sleepEntry.wake_time.slice(0,5)}
+                  {sleepEntry.sleep_time.slice(0,5)} → {sleepEntry.wake_time.slice(0,5)}
                 </div>
               )}
               <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>

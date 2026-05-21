@@ -24,6 +24,7 @@ export default function NotesPage() {
   const [editNote, setEditNote] = useState<Note | null>(null)
   const [form, setForm] = useState({ title: '', content: '', category: 'General' })
   const [saving, setSaving] = useState(false)
+  const [noteError, setNoteError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   function openNew() {
@@ -41,9 +42,11 @@ export default function NotesPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await upsertNote(editNote ? { ...form, id: editNote.id } : form)
-    setModalOpen(false)
+    setNoteError(null)
+    const err = await upsertNote(editNote ? { ...form, id: editNote.id } : form)
     setSaving(false)
+    if (err) { setNoteError(err); return }
+    setModalOpen(false)
   }
 
   const filtered = useMemo(() => {
@@ -150,7 +153,7 @@ export default function NotesPage() {
         </div>
       )}
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editNote ? 'Editar nota' : 'Nueva nota'} size="md">
+      <Modal isOpen={modalOpen} onClose={() => { setModalOpen(false); setNoteError(null) }} title={editNote ? 'Editar nota' : 'Nueva nota'} size="md">
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
@@ -161,9 +164,14 @@ export default function NotesPage() {
             </SelectInput>
           </div>
           <Textarea label="Contenido" value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} placeholder="Escribí tu nota..." style={{ minHeight: 200 }} />
+          {noteError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--red)' }}>
+              {noteError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
             {editNote && <Btn variant="danger" type="button" onClick={() => { deleteNote(editNote.id); setModalOpen(false) }}>Eliminar</Btn>}
-            <Btn variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancelar</Btn>
+            <Btn variant="ghost" type="button" onClick={() => { setModalOpen(false); setNoteError(null) }}>Cancelar</Btn>
             <Btn variant="primary" type="submit" loading={saving}>Guardar</Btn>
           </div>
         </form>

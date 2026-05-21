@@ -10,7 +10,7 @@ import Modal from '@/components/ui/Modal'
 import Btn from '@/components/ui/Btn'
 import { Input } from '@/components/ui/Input'
 import EmptyState from '@/components/ui/EmptyState'
-import { today, addDays, getDaysInRange, getWeekRange, formatDate } from '@/lib/utils'
+import { today, addDays, getDaysInRange, getWeekRange, formatDate, HABIT_EMOJI_OPTIONS } from '@/lib/utils'
 import type { Habit, HabitEntry } from '@/lib/types'
 
 const DAYS_ES = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -25,23 +25,30 @@ export default function HabitsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ name: '', emoji: '✅', weekly_goal: 7 })
   const [saving, setSaving] = useState(false)
+  const [habitError, setHabitError] = useState<string | null>(null)
 
   const { start: weekStart, end: weekEnd } = getWeekRange()
   const monthStart = `${today().slice(0, 7)}-01`
   const monthEnd = (() => {
-    const d = new Date(today().slice(0, 7) + '-01')
+    const d = new Date(today().slice(0, 7) + '-01T00:00:00')
     return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
   })()
 
   const fetchAll = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    const rangeEnd = today()
     const [habitsRes, entriesRes] = await Promise.all([
       supabase.from('habits').select('*').eq('user_id', user.id).eq('active', true).order('created_at'),
-      supabase.from('habit_entries').select('*').eq('user_id', user.id).gte('date', monthStart).lte('date', today()),
+      supabase.from('habit_entries').select('*').eq('user_id', user.id).gte('date', monthStart).lte('date', rangeEnd),
     ])
-    setHabits(habitsRes.data ?? [])
-    setEntries(entriesRes.data ?? [])
+    if (habitsRes.error) console.error('[habits] fetchHabits error:', { message: habitsRes.error.message, code: habitsRes.error.code })
+    if (entriesRes.error) console.error('[habits] fetchEntries error:', { message: entriesRes.error.message, code: entriesRes.error.code })
+    console.log(`[habits] rango ${monthStart} → ${rangeEnd} | hábitos: ${habitsRes.data?.length ?? 'ERR'} | entradas: ${entriesRes.data?.length ?? 'ERR'}`)
+    console.log('[habits] habits data:', habitsRes.data)
+    console.log('[habits] entries data:', entriesRes.data)
+    if (habitsRes.data !== null) setHabits(habitsRes.data)
+    if (entriesRes.data !== null) setEntries(entriesRes.data)
     setLoading(false)
   }, [monthStart])
 
@@ -52,26 +59,46 @@ export default function HabitsPage() {
     if (!user) return
     const existing = entries.find(e => e.habit_id === habitId && e.date === date && e.completed)
     if (existing) {
-      await supabase.from('habit_entries').delete().eq('habit_id', habitId).eq('date', date)
+      const { error } = await supabase.from('habit_entries').delete().eq('habit_id', habitId).eq('date', date)
+      if (error) { console.error('[habits] delete entry error:', { message: error.message, code: error.code }); return }
       setEntries(prev => prev.filter(e => !(e.habit_id === habitId && e.date === date)))
     } else {
-      const { data } = await supabase.from('habit_entries').upsert(
+      const { data, error } = await supabase.from('habit_entries').upsert(
         { habit_id: habitId, user_id: user.id, date, completed: true },
         { onConflict: 'habit_id,date' }
       ).select().single()
+      if (error) { console.error('[habits] upsert entry error:', { message: error.message, code: error.code }); return }
       if (data) setEntries(prev => [...prev.filter(e => !(e.habit_id === habitId && e.date === date)), data])
     }
   }
 
   async function addHabit(e: React.FormEvent) {
     e.preventDefault()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!form.name.trim()) return
+    setHabitError(null)
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error('[habits] auth error:', authError)
+      setHabitError('No autenticado. Iniciá sesión nuevamente.')
+      return
+    }
     setSaving(true)
-    await supabase.from('habits').insert({ user_id: user.id, name: form.name, emoji: form.emoji, weekly_goal: form.weekly_goal })
-    setForm({ name: '', emoji: '✅', weekly_goal: 7 })
-    setModalOpen(false)
+    const payload = { user_id: user.id, name: form.name.trim(), emoji: form.emoji, weekly_goal: form.weekly_goal, active: true }
+    console.log('[habits] inserting habit:', payload)
+    const { error } = await supabase.from('habits').insert(payload)
     setSaving(false)
+    if (error) {
+      const errAny = error as unknown
+      const errStr = JSON.stringify(errAny, Object.getOwnPropertyNames(errAny instanceof Object ? errAny : {}))
+      console.error('[habits] insert error (raw):', errAny)
+      console.error('[habits] insert error (all props):', errStr)
+      const msg = (error as { message?: string }).message || String(errAny) || 'Error al crear el habito'
+      setHabitError(msg)
+      return
+    }
+    setForm({ name: '', emoji: '✅', weekly_goal: 7 })
+    setHabitError(null)
+    setModalOpen(false)
     await fetchAll()
   }
 
@@ -81,7 +108,8 @@ export default function HabitsPage() {
   }
 
   // Day tab helpers
-  const dayEntries = entries.filter(e => e.date === selectedDate && e.completed)
+  const activeHabitIds = new Set(habits.map(h => h.id))
+  const dayEntries = entries.filter(e => e.date === selectedDate && e.completed && activeHabitIds.has(e.habit_id))
   const dayPct = habits.length > 0 ? (dayEntries.length / habits.length) * 100 : 0
 
   // Week tab helpers
@@ -104,8 +132,15 @@ export default function HabitsPage() {
   const monthDays = getDaysInRange(monthStart, monthEnd)
   const getDayScore = (date: string) => {
     if (habits.length === 0) return 0
-    const completed = entries.filter(e => e.date === date && e.completed).length
+    const completed = entries.filter(e => e.date === date && e.completed && activeHabitIds.has(e.habit_id)).length
     return Math.round((completed / habits.length) * 100)
+  }
+
+  // Debug: log entries state when month tab is active (runs once after entries change)
+  if (tab === 'mes') {
+    console.log('[habits:mes] entries en state:', entries.length, entries.slice(0, 5))
+    console.log('[habits:mes] monthStart:', monthStart, '| monthEnd:', monthEnd)
+    console.log('[habits:mes] scores días 1-5:', monthDays.slice(0, 5).map(d => ({ day: d, score: getDayScore(d) })))
   }
 
   // Month stats
@@ -283,12 +318,28 @@ export default function HabitsPage() {
       </div>
 
       {/* Modal nuevo hábito */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo hábito" size="sm">
+      <Modal isOpen={modalOpen} onClose={() => { setModalOpen(false); setHabitError(null) }} title="Nuevo hábito" size="sm">
         <form onSubmit={addHabit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Input label="Emoji" value={form.emoji} onChange={e => setForm(p => ({ ...p, emoji: e.target.value }))} style={{ maxWidth: 80 }} />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Emoji</label>
+              <div style={{ width: 52, height: 42, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, background: 'var(--bg-root)' }}>
+                {form.emoji}
+              </div>
+            </div>
             <div style={{ flex: 1 }}>
               <Input label="Nombre del hábito" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required placeholder="Ej: Meditar" />
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Elegí un emoji</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)', maxHeight: 130, overflowY: 'auto' }}>
+              {HABIT_EMOJI_OPTIONS.map(emoji => (
+                <button key={emoji} type="button" onClick={() => setForm(p => ({ ...p, emoji }))}
+                  style={{ fontSize: 20, background: form.emoji === emoji ? 'var(--accent-muted)' : 'none', border: form.emoji === emoji ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}>
+                  {emoji}
+                </button>
+              ))}
             </div>
           </div>
           <div>
@@ -303,8 +354,13 @@ export default function HabitsPage() {
               <span>1 día</span><span>7 días</span>
             </div>
           </div>
+          {habitError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--red)' }}>
+              {habitError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-            <Btn variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancelar</Btn>
+            <Btn variant="ghost" type="button" onClick={() => { setModalOpen(false); setHabitError(null) }}>Cancelar</Btn>
             <Btn variant="primary" type="submit" loading={saving}>Crear hábito</Btn>
           </div>
         </form>

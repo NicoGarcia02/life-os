@@ -13,14 +13,28 @@ import { today, formatCurrency, formatDate, EMOJI_OPTIONS } from '@/lib/utils'
 import type { Transaction, FinanceCategory } from '@/lib/types'
 
 export default function FinancesPage() {
-  const { categories, transactions, monthTx, monthIncome, monthExpense, monthBalance, loading, addTransaction, deleteTransaction, addCategory, updateCategory, refetch } = useFinances()
+  const { categories, transactions, monthTx, monthIncome, monthExpense, monthBalance, loading, addTransaction, deleteTransaction, updateTransaction, addCategory, updateCategory, refetch } = useFinances()
   const [tab, setTab] = useState('resumen')
   const [txModal, setTxModal] = useState(false)
   const [catModal, setCatModal] = useState(false)
   const [editCat, setEditCat] = useState<FinanceCategory | null>(null)
+  const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [txForm, setTxForm] = useState({ description: '', amount: '', type: 'gasto' as 'gasto' | 'ingreso', category_id: '', date: today() })
   const [catForm, setCatForm] = useState({ name: '', icon: '💰', budget: '' })
   const [saving, setSaving] = useState(false)
+  const [txError, setTxError] = useState<string | null>(null)
+
+  function openNewTx() {
+    setEditTx(null)
+    setTxForm({ description: '', amount: '', type: 'gasto', category_id: '', date: today() })
+    setTxModal(true)
+  }
+
+  function openEditTx(tx: Transaction) {
+    setEditTx(tx)
+    setTxForm({ description: tx.description, amount: tx.amount.toString(), type: tx.type, category_id: tx.category_id ?? '', date: tx.date })
+    setTxModal(true)
+  }
 
   function openNewCat() {
     setEditCat(null)
@@ -37,10 +51,14 @@ export default function FinancesPage() {
   async function saveTx(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await addTransaction({ ...txForm, amount: parseFloat(txForm.amount), category_id: txForm.category_id || null })
-    setTxModal(false)
-    setTxForm({ description: '', amount: '', type: 'gasto', category_id: '', date: today() })
+    setTxError(null)
+    const txData = { ...txForm, amount: parseFloat(txForm.amount), category_id: txForm.category_id || null }
+    const err = editTx ? await updateTransaction(editTx.id, txData) : await addTransaction(txData)
     setSaving(false)
+    if (err) { setTxError(err); return }
+    setTxModal(false)
+    setEditTx(null)
+    setTxForm({ description: '', amount: '', type: 'gasto', category_id: '', date: today() })
   }
 
   async function saveCat(e: React.FormEvent) {
@@ -78,7 +96,7 @@ export default function FinancesPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Finanzas</h1>
           <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 4 }}>Control de ingresos y gastos</p>
         </div>
-        <Btn variant="primary" onClick={() => setTxModal(true)}>+ Agregar</Btn>
+        <Btn variant="primary" onClick={openNewTx}>+ Agregar</Btn>
       </div>
 
       <TabBar
@@ -110,7 +128,7 @@ export default function FinancesPage() {
                 {totalBudget > 0 && (
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>vs presupuesto total {formatCurrency(totalBudget)}</div>
-                    <ProgressBar value={projectedExpense} total={totalBudget} height={10} color={projectedExpense > totalBudget ? 'var(--red)' : 'var(--green)'} showLabel />
+                    <ProgressBar value={projectedExpense} total={totalBudget} height={10} color={projectedExpense > totalBudget ? 'var(--red)' : 'var(--green)'} />
                   </div>
                 )}
               </div>
@@ -147,7 +165,7 @@ export default function FinancesPage() {
         {tab === 'movimientos' && (
           <div>
             {transactions.length === 0 ? (
-              <EmptyState icon="💰" title="Sin movimientos" description="Registrá tu primer ingreso o gasto." action={{ label: '+ Agregar', onClick: () => setTxModal(true) }} />
+              <EmptyState icon="💰" title="Sin movimientos" description="Registrá tu primer ingreso o gasto." action={{ label: '+ Agregar', onClick: openNewTx }} />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {transactions.map((tx, i) => {
@@ -175,6 +193,7 @@ export default function FinancesPage() {
                       }}>
                         {tx.type === 'ingreso' ? '+' : '-'}{formatCurrency(tx.amount)}
                       </div>
+                      <Btn variant="ghost" size="sm" onClick={() => openEditTx(tx)}>✎</Btn>
                       <Btn variant="danger" size="sm" onClick={() => deleteTransaction(tx.id)}>✕</Btn>
                     </div>
                   )
@@ -231,7 +250,7 @@ export default function FinancesPage() {
       </div>
 
       {/* Modal Transacción */}
-      <Modal isOpen={txModal} onClose={() => setTxModal(false)} title="Nueva transacción" size="sm">
+      <Modal isOpen={txModal} onClose={() => { setTxModal(false); setEditTx(null) }} title={editTx ? 'Editar transacción' : 'Nueva transacción'} size="sm">
         <form onSubmit={saveTx} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Input label="Descripción" value={txForm.description} onChange={e => setTxForm(p => ({ ...p, description: e.target.value }))} required placeholder="Ej: Almuerzo" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -248,29 +267,42 @@ export default function FinancesPage() {
               {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
             </SelectInput>
           )}
+          {txError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--red)' }}>
+              {txError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-            <Btn variant="ghost" type="button" onClick={() => setTxModal(false)}>Cancelar</Btn>
-            <Btn variant="primary" type="submit" loading={saving}>Guardar</Btn>
+            <Btn variant="ghost" type="button" onClick={() => { setTxModal(false); setEditTx(null); setTxError(null) }}>Cancelar</Btn>
+            <Btn variant="primary" type="submit" loading={saving}>{editTx ? 'Guardar' : 'Agregar'}</Btn>
           </div>
         </form>
       </Modal>
 
       {/* Modal Categoría */}
-      <Modal isOpen={catModal} onClose={() => setCatModal(false)} title={editCat ? 'Editar categoría' : 'Nueva categoría'} size="sm">
-        <form onSubmit={saveCat} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Input label="Ícono" value={catForm.icon} onChange={e => setCatForm(p => ({ ...p, icon: e.target.value }))} style={{ maxWidth: 80 }} />
+      <Modal isOpen={catModal} onClose={() => setCatModal(false)} title={editCat ? 'Editar categoría' : 'Nueva categoría'} size="md">
+        <form onSubmit={saveCat} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{ flexShrink: 0 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Ícono</label>
+              <div style={{ width: 52, height: 42, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, background: 'var(--bg-root)' }}>
+                {catForm.icon}
+              </div>
+            </div>
             <div style={{ flex: 1 }}>
               <Input label="Nombre" value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} required placeholder="Ej: Comida" />
             </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)' }}>
-            {EMOJI_OPTIONS.map(emoji => (
-              <button key={emoji} type="button" onClick={() => setCatForm(p => ({ ...p, icon: emoji }))}
-                style={{ fontSize: 20, background: catForm.icon === emoji ? 'var(--accent-muted)' : 'none', border: catForm.icon === emoji ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}>
-                {emoji}
-              </button>
-            ))}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Elegí un ícono</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)', maxHeight: 150, overflowY: 'auto' }}>
+              {EMOJI_OPTIONS.map(emoji => (
+                <button key={emoji} type="button" onClick={() => setCatForm(p => ({ ...p, icon: emoji }))}
+                  style={{ fontSize: 20, background: catForm.icon === emoji ? 'var(--accent-muted)' : 'none', border: catForm.icon === emoji ? '1px solid var(--accent)' : '1px solid transparent', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
           <Input label="Presupuesto mensual" type="number" value={catForm.budget} onChange={e => setCatForm(p => ({ ...p, budget: e.target.value }))} min="0" step="0.01" placeholder="Opcional" />
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>

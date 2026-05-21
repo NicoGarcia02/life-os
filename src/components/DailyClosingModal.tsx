@@ -4,7 +4,7 @@ import Modal from '@/components/ui/Modal'
 import Btn from '@/components/ui/Btn'
 import { Input, Textarea } from '@/components/ui/Input'
 import { useDailyClosing } from '@/hooks/useDailyClosing'
-import { today, calcHoursSlept } from '@/lib/utils'
+import { today, entryHours } from '@/lib/utils'
 import type { SleepEntry } from '@/lib/types'
 
 interface DailyClosingModalProps {
@@ -23,7 +23,7 @@ const RATINGS = [
 export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModalProps) {
   const [step, setStep] = useState(1)
   const [existingSleep, setExistingSleep] = useState<SleepEntry | null>(null)
-  const [bedtime, setBedtime] = useState('23:00')
+  const [sleepTime, setSleepTime] = useState('23:00')
   const [wakeTime, setWakeTime] = useState('07:00')
   const [quality, setQuality] = useState(4)
   const [rating, setRating] = useState<number | null>(null)
@@ -54,8 +54,7 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
     if (!rating) return
     setSaving(true)
     if (!existingSleep && step >= 1) {
-      const hours = calcHoursSlept(bedtime, wakeTime)
-      await saveSleepForClosing({ date: t, bedtime, wake_time: wakeTime, hours_slept: hours, quality })
+      await saveSleepForClosing({ date: t, sleep_time: sleepTime, wake_time: wakeTime, quality })
     }
     await saveClosing(t, rating, journal)
     setSaving(false)
@@ -85,7 +84,7 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
             <>
               <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Registrá tu sueño de anoche para completar el día.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Input label="Me dormí" type="time" value={bedtime} onChange={e => setBedtime(e.target.value)} />
+                <Input label="Me dormí" type="time" value={sleepTime} onChange={e => setSleepTime(e.target.value)} />
                 <Input label="Me desperté" type="time" value={wakeTime} onChange={e => setWakeTime(e.target.value)} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
