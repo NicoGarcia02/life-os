@@ -77,7 +77,7 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
             }}>
               <div style={{ fontSize: 20, marginBottom: 6 }}>✓</div>
               <div style={{ fontSize: 14, color: 'var(--green)', fontWeight: 500 }}>
-                Sueño ya registrado: {existingSleep.hours_slept}h · Calidad {existingSleep.quality}/5
+                Sueño ya registrado: {entryHours(existingSleep)}h · Calidad {existingSleep.quality}/5
               </div>
             </div>
           ) : (
