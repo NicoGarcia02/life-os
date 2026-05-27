@@ -224,11 +224,11 @@ export default function HabitsPage() {
         {/* TAB SEMANA */}
         {tab === 'semana' && (
           <div>
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 20, overflowX: 'auto' }}>
               <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
                 Semana del {formatDate(weekStart, { day: 'numeric', month: 'short' })} al {formatDate(weekEnd, { day: 'numeric', month: 'short' })}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(8, 1fr)`, gap: 4, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(8, 1fr)`, gap: 4, marginBottom: 20, minWidth: 500 }}>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Hábito</div>
                 {DAYS_ES.map(d => <div key={d} style={{ fontSize: 12, color: 'var(--text-tertiary)', textAlign: 'center' }}>{d}</div>)}
               </div>
@@ -244,7 +244,7 @@ export default function HabitsPage() {
                     : `⚠️ Faltan ${habit.weekly_goal - weekCount} en ${daysLeft} días`
                 return (
                   <div key={habit.id} className={`animate-fade stagger-${Math.min(i + 1, 7)}`} style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(8, 1fr)`, gap: 4, marginBottom: 6, alignItems: 'center' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(8, 1fr)`, gap: 4, marginBottom: 6, alignItems: 'center', minWidth: 500 }}>
                       <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span>{habit.emoji}</span>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{habit.name}</span>
@@ -283,7 +283,7 @@ export default function HabitsPage() {
         {/* TAB MES */}
         {tab === 'mes' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+            <div className="grid-3" style={{ gap: 12, marginBottom: 24 }}>
               <StatCard label="Tasa promedio" value={`${Math.round(avgRate)}%`} />
               <StatCard label="Semanas perfectas" value={perfectWeeks} />
               <StatCard label="Hábitos activos" value={habits.length} />

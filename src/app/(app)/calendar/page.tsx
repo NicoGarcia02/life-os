@@ -144,6 +144,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={day}
+                    className="cal-cell"
                     onClick={() => setSelectedDay(isSelected ? null : dateStr)}
                     style={{
                       minHeight: 80,

@@ -108,7 +108,7 @@ export default function FinancesPage() {
       <div style={{ marginTop: 24 }}>
         {tab === 'resumen' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div className="grid-3" style={{ gap: 12, marginBottom: 20 }}>
               <StatCard label="Balance del mes" value={formatCurrency(monthBalance)} trendUp={monthBalance > 0} trendDown={monthBalance < 0} />
               <StatCard label="Ingresos" value={formatCurrency(monthIncome)} trendUp={monthIncome > 0} />
               <StatCard label="Gastos" value={formatCurrency(monthExpense)} trendDown={monthExpense > 0} />

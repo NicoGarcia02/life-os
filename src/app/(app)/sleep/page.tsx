@@ -238,7 +238,7 @@ export default function SleepPage() {
       <div style={{ marginTop: 24 }}>
         {tab === 'registro' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+            <div className="grid-3" style={{ gap: 12, marginBottom: 24 }}>
               <StatCard label="Promedio semanal" value={`${avgHours}h`} trend="últimos 7 días" trendUp={avgHours >= 7} trendDown={avgHours < 6} />
               <StatCard label="Calidad promedio" value={`${avgQuality}/5`} trendUp={avgQuality >= 4} />
               <StatCard label="Consistencia" value={`${consistencyPct}%`} trend="noches ≥7h" trendUp={consistencyPct >= 70} />
@@ -290,7 +290,7 @@ export default function SleepPage() {
               <EmptyState icon="🌙" title="Sin registros esta semana" description="Registrá tu sueño para ver el resumen semanal." action={{ label: '+ Registrar', onClick: openNew }} />
             ) : (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 24 }}>
+                <div className="grid-2" style={{ gap: 12, marginBottom: 24 }}>
                   <StatCard label="Promedio horas" value={`${weekAvgHours}h`} trendUp={weekAvgHours >= 7} trendDown={weekAvgHours < 6} />
                   <StatCard label="Calidad promedio" value={`${weekAvgQuality}/5`} trendUp={weekAvgQuality >= 4} />
                   {bestNight && (
@@ -319,7 +319,7 @@ export default function SleepPage() {
               <EmptyState icon="📅" title="Sin registros este mes" description="Registrá tu sueño para ver el resumen mensual." action={{ label: '+ Registrar', onClick: openNew }} />
             ) : (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                <div className="grid-3" style={{ gap: 12, marginBottom: 20 }}>
                   <StatCard label="Promedio del mes" value={`${monthAvgHours}h`} trendUp={monthAvgHours >= 7} trendDown={monthAvgHours < 6} />
                   <StatCard label="Noches registradas" value={thisMonthEntries.length} />
                   <StatCard label="Consistencia" value={`${monthConsistency}%`} trend="noches ≥7h" trendUp={monthConsistency >= 70} />
@@ -351,7 +351,7 @@ export default function SleepPage() {
 
         {tab === 'tendencias' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+            <div className="grid-2" style={{ gap: 12, marginBottom: 24 }}>
               <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
                 <div style={{ fontSize: 12, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Hora promedio de dormir</div>
                 <div style={{ fontSize: 40, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-accent)' }}>{avgBed ?? '—'}</div>

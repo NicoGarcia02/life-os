@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import StatCard from '@/components/ui/StatCard'
 import SectionHeader from '@/components/ui/SectionHeader'
 import ProgressBar from '@/components/ui/ProgressBar'
 import ScoreRing from '@/components/ui/ScoreRing'
@@ -166,7 +165,7 @@ export default function WeeklyPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="grid-2" style={{ gap: 16, marginBottom: 16 }}>
         {/* Hábitos */}
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="Metas semanales" />
@@ -226,7 +225,7 @@ export default function WeeklyPage() {
         {/* Tareas */}
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="Tareas" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div className="grid-3" style={{ gap: 12, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Completadas</div>
               <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>{weekTasksCompleted}</div>

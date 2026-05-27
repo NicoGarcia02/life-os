@@ -265,7 +265,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Grilla 2x2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="grid-2" style={{ gap: 16 }}>
         {/* Hábitos */}
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="Hábitos de hoy" action={

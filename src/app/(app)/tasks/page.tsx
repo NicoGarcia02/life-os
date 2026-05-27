@@ -174,7 +174,7 @@ export default function TasksPage() {
 
         {tab === 'proximas' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+            <div className="grid-3" style={{ gap: 12, marginBottom: 24 }}>
               <StatCard label="Pendientes" value={tasks.filter(t => !t.completed).length} />
               <StatCard label="Alta prioridad" value={tasks.filter(t => !t.completed && t.priority === 'alta').length} highlight={tasks.filter(t => !t.completed && t.priority === 'alta').length > 0 ? 'red' : undefined} />
               <StatCard label="Atrasadas" value={overdueTasks.length} highlight={overdueTasks.length > 0 ? 'red' : undefined} />
@@ -193,7 +193,7 @@ export default function TasksPage() {
 
         {tab === 'todas' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+            <div className="grid-3" style={{ gap: 12, marginBottom: 24 }}>
               <StatCard label="Total" value={tasks.length} />
               <StatCard label="Completadas" value={allCompleted} />
               <StatCard label="Tasa de completado" value={`${completionRate}%`} trendUp={completionRate >= 70} />
