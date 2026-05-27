@@ -240,19 +240,29 @@ body {
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
   .grid-2 { grid-template-columns: 1fr; }
 
-  /* Calendar day cells: smaller on mobile */
+  /* Calendar day cells: compact on mobile */
   .cal-cell {
-    min-height: 56px !important;
+    height: 56px !important;
+    overflow: hidden !important;
     padding: 4px 3px !important;
   }
 
-  .cal-cell > div:first-child {
-    font-size: 11px !important;
-    margin-bottom: 2px !important;
+  /* Modal: avoid overlap with fixed header */
+  .modal-overlay {
+    padding-top: 72px;
+    align-items: flex-start;
   }
+}
 
-  .cal-event {
-    font-size: 9px !important;
+/* ======= HABITS WEEK GRID ======= */
+.habits-week-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+}
+
+@media (max-width: 767px) {
+  .habits-week-grid {
+    grid-template-columns: 2fr repeat(7, 1fr);
   }
 }
 

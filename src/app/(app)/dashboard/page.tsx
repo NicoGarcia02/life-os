@@ -328,7 +328,9 @@ export default function DashboardPage() {
 
         {/* Nota rápida */}
         <div className="card" style={{ padding: 20 }}>
-          <SectionHeader title="Nota rápida" />
+          <SectionHeader title="Nota rápida" action={
+            <Btn variant="secondary" size="sm" onClick={() => setNoteModal(true)}>+ Nota</Btn>
+          } />
           <textarea
             className="input-base"
             placeholder="Escribí algo rápido..."

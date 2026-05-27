@@ -147,7 +147,8 @@ export default function CalendarPage() {
                     className="cal-cell"
                     onClick={() => setSelectedDay(isSelected ? null : dateStr)}
                     style={{
-                      minHeight: 80,
+                      height: 80,
+                      overflow: 'hidden',
                       padding: '8px 6px',
                       borderRadius: 'var(--radius-sm)',
                       background: isSelected ? 'var(--accent-muted)' : isToday ? 'var(--bg-hover)' : 'var(--bg-elevated)',
