@@ -10,6 +10,7 @@ const NAV = [
   { href: '/tasks', icon: '☑', label: 'Tareas' },
   { href: '/finances', icon: '$', label: 'Finanzas' },
   { href: '/notes', icon: '✎', label: 'Notas' },
+  { href: '/journal', icon: '◈', label: 'Diario' },
   { href: '/calendar', icon: '▦', label: 'Calendario' },
   { href: '/weekly', icon: '▤', label: 'Resumen' },
 ]

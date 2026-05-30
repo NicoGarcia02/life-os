@@ -30,7 +30,8 @@ export default function HabitsPage() {
   const monthStart = `${today().slice(0, 7)}-01`
   const monthEnd = (() => {
     const d = new Date(today().slice(0, 7) + '-01')
-    return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
   })()
 
   const fetchAll = useCallback(async () => {

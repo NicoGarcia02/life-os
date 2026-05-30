@@ -21,6 +21,7 @@ const RATINGS = [
 ]
 
 export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModalProps) {
+  const [selectedDate, setSelectedDate] = useState(today())
   const [step, setStep] = useState(1)
   const [existingSleep, setExistingSleep] = useState<SleepEntry | null>(null)
   const [bedtime, setBedtime] = useState('23:00')
@@ -31,33 +32,37 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
   const [saving, setSaving] = useState(false)
 
   const { getClosing, saveClosing, saveSleepForClosing, getSleepEntry } = useDailyClosing()
-  const t = today()
+
+  useEffect(() => {
+    if (!isOpen) return
+    setSelectedDate(today())
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
     setStep(1)
     setRating(null)
     setJournal('')
-    getSleepEntry(t).then(entry => {
+    getSleepEntry(selectedDate).then(entry => {
       setExistingSleep(entry)
     })
-    getClosing(t).then(closing => {
+    getClosing(selectedDate).then(closing => {
       if (closing) {
         setRating(closing.day_rating)
         setJournal(closing.journal ?? '')
         setStep(2)
       }
     })
-  }, [isOpen])
+  }, [isOpen, selectedDate])
 
   async function handleFinish() {
     if (!rating) return
     setSaving(true)
     if (!existingSleep && step >= 1) {
       const hours = calcHoursSlept(bedtime, wakeTime)
-      await saveSleepForClosing({ date: t, bedtime, wake_time: wakeTime, hours_slept: hours, quality })
+      await saveSleepForClosing({ date: selectedDate, bedtime, wake_time: wakeTime, hours_slept: hours, quality })
     }
-    await saveClosing(t, rating, journal)
+    await saveClosing(selectedDate, rating, journal)
     setSaving(false)
     onClose()
   }
@@ -66,6 +71,29 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Cerrar el día — Paso ${step}/3: ${titles[step - 1]}`} size="md">
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
+          Fecha
+        </label>
+        <input
+          type="date"
+          value={selectedDate}
+          max={today()}
+          onChange={e => setSelectedDate(e.target.value)}
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-sm)',
+            color: 'var(--text-primary)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 14,
+            padding: '8px 12px',
+            outline: 'none',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
       {step === 1 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {existingSleep ? (

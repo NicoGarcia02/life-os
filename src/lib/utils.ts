@@ -1,5 +1,9 @@
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function today(): string {
-  return new Date().toISOString().split('T')[0]
+  return localDateStr(new Date())
 }
 
 export function formatDate(dateStr: string, opts?: Intl.DateTimeFormatOptions): string {
@@ -35,8 +39,8 @@ export function getWeekRange(offsetWeeks = 0): { start: string; end: string } {
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
   return {
-    start: monday.toISOString().split('T')[0],
-    end: sunday.toISOString().split('T')[0],
+    start: localDateStr(monday),
+    end: localDateStr(sunday),
   }
 }
 
@@ -45,7 +49,7 @@ export function getDaysInRange(start: string, end: string): string[] {
   const current = new Date(start + 'T00:00:00')
   const endDate = new Date(end + 'T00:00:00')
   while (current <= endDate) {
-    days.push(current.toISOString().split('T')[0])
+    days.push(localDateStr(current))
     current.setDate(current.getDate() + 1)
   }
   return days
@@ -54,7 +58,7 @@ export function getDaysInRange(start: string, end: string): string[] {
 export function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T00:00:00')
   d.setDate(d.getDate() + n)
-  return d.toISOString().split('T')[0]
+  return localDateStr(d)
 }
 
 export function scoreColor(score: number): string {
