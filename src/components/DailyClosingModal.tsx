@@ -4,7 +4,7 @@ import Modal from '@/components/ui/Modal'
 import Btn from '@/components/ui/Btn'
 import { Input, Textarea } from '@/components/ui/Input'
 import { useDailyClosing } from '@/hooks/useDailyClosing'
-import { today, entryHours } from '@/lib/utils'
+import { today, calcHoursSlept, entryHours } from '@/lib/utils'
 import type { SleepEntry } from '@/lib/types'
 
 interface DailyClosingModalProps {
@@ -59,8 +59,7 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
     if (!rating) return
     setSaving(true)
     if (!existingSleep && step >= 1) {
-      const hours = calcHoursSlept(bedtime, wakeTime)
-      await saveSleepForClosing({ date: selectedDate, bedtime, wake_time: wakeTime, hours_slept: hours, quality })
+      await saveSleepForClosing({ date: selectedDate, sleep_time: sleepTime, wake_time: wakeTime, quality })
     }
     await saveClosing(selectedDate, rating, journal)
     setSaving(false)
