@@ -247,11 +247,6 @@ body {
     padding: 4px 3px !important;
   }
 
-  /* Modal: dar espacio al header fijo pero mantener centrado */
-  .modal-overlay {
-    padding: 72px 12px 12px;
-    align-items: center;
-  }
 }
 
 /* ======= HABITS WEEK GRID ======= */

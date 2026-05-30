@@ -26,7 +26,20 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
   const widths = { sm: 400, md: 520, lg: 680 }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+    >
       <div
         className="animate-slide-up"
         style={{
@@ -36,7 +49,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
           boxShadow: 'var(--shadow-elevated)',
           width: '100%',
           maxWidth: widths[size],
-          maxHeight: 'calc(100dvh - 96px)',
+          maxHeight: 'calc(100vh - 32px)',
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
