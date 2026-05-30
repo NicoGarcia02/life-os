@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { Note } from '@/lib/types'
+import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 export function useNotes() {
   const [notes, setNotes] = useState<Note[]>([])
@@ -41,6 +42,7 @@ export function useNotes() {
   }, [fetchNotes])
 
   useEffect(() => { fetchNotes() }, [fetchNotes])
+  useRefetchOnFocus(fetchNotes)
 
   return { notes, loading, upsertNote, deleteNote, refetch: fetchNotes }
 }

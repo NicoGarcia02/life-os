@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { FinanceCategory, Transaction } from '@/lib/types'
+import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 export function useFinances() {
   const [categories, setCategories] = useState<FinanceCategory[]>([])
@@ -55,6 +56,7 @@ export function useFinances() {
   }, [fetchAll])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+  useRefetchOnFocus(fetchAll)
 
   const now = new Date()
   const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`

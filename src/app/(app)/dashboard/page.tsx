@@ -103,6 +103,11 @@ export default function DashboardPage() {
   }, [t])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchAll() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [fetchAll])
 
   async function toggleHabit(habitId: string) {
     const { data: { user } } = await supabase.auth.getUser()
@@ -165,6 +170,7 @@ export default function DashboardPage() {
     await supabase.from('notes').insert({ user_id: user.id, ...noteForm })
     setNoteModal(false)
     setNoteForm({ title: '', content: '', category: 'General' })
+    fetchAll()
   }
 
   // Computed values

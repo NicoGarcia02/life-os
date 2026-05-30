@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { Habit, HabitEntry } from '@/lib/types'
 import { today } from '@/lib/utils'
+import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 export function useHabits() {
   const [habits, setHabits] = useState<Habit[]>([])
@@ -63,6 +64,7 @@ export function useHabits() {
     const t = today()
     fetchEntries(t, t)
   }, [fetchHabits, fetchEntries])
+  useRefetchOnFocus(fetchHabits)
 
   return { habits, entries, loading, fetchEntries, toggleEntry, addHabit, deleteHabit, refetch: fetchHabits }
 }

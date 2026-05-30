@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { Task } from '@/lib/types'
 import { today } from '@/lib/utils'
+import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -47,6 +48,7 @@ export function useTasks() {
   }, [fetchTasks])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
+  useRefetchOnFocus(fetchTasks)
 
   const t = today()
   const todayTasks = tasks.filter(task => task.due_date === t || (!task.due_date && task.created_at?.startsWith(t)))

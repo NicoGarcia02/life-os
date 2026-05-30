@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { SleepEntry } from '@/lib/types'
 import { addDays, today } from '@/lib/utils'
+import { useRefetchOnFocus } from './useRefetchOnFocus'
 
 export function useSleep() {
   const [entries, setEntries] = useState<SleepEntry[]>([])
@@ -52,6 +53,7 @@ export function useSleep() {
   }, [fetchEntries])
 
   useEffect(() => { fetchEntries(60) }, [fetchEntries])
+  useRefetchOnFocus(() => fetchEntries(60))
 
   return { entries, loading, upsertEntry, deleteEntry, refetch: fetchEntries }
 }

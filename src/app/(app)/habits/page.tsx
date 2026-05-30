@@ -54,6 +54,11 @@ export default function HabitsPage() {
   }, [monthStart])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchAll() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [fetchAll])
 
   async function toggleEntry(habitId: string, date: string) {
     const { data: { user } } = await supabase.auth.getUser()

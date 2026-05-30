@@ -79,6 +79,11 @@ export default function WeeklyPage() {
   }, [weekStart, weekEnd])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchAll() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [fetchAll])
 
   // Scores per day
   const dayScores = weekDays.map(day => {
