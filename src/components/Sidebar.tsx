@@ -7,12 +7,12 @@ const NAV = [
   { href: '/dashboard', icon: '⊞', label: 'Dashboard' },
   { href: '/habits', icon: '✓', label: 'Hábitos' },
   { href: '/sleep', icon: '◑', label: 'Sueño' },
-  { href: '/tasks', icon: '☑', label: 'Tareas' },
-  { href: '/weekly-tasks', icon: '⊟', label: 'Semana' },
   { href: '/finances', icon: '$', label: 'Finanzas' },
+  { href: '/calendar', icon: '▦', label: 'Calendario' },
+  { href: '/weekly-tasks', icon: '⊟', label: 'Semana' },
+  { href: '/tasks', icon: '☑', label: 'Tareas' },
   { href: '/notes', icon: '✎', label: 'Notas' },
   { href: '/journal', icon: '◈', label: 'Diario' },
-  { href: '/calendar', icon: '▦', label: 'Calendario' },
   { href: '/weekly', icon: '▤', label: 'Resumen' },
 ]
 

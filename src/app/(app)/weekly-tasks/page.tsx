@@ -20,13 +20,15 @@ const PRIORITY_BG: Record<string, string> = {
 
 function WeekNav({ offset, onChange }: { offset: number; onChange: (o: number) => void }) {
   const { start, end } = getWeekRange(offset)
+  const label = offset === 0 ? 'Esta semana' : offset === -1 ? 'Semana pasada' : offset === 1 ? 'Próxima semana' : null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <button onClick={() => onChange(offset - 1)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', width: 32, height: 32, cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 16 }}>‹</button>
-      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', minWidth: 220, textAlign: 'center' }}>
-        {offset === 0 ? 'Esta semana — ' : offset === -1 ? 'Semana pasada — ' : ''}{formatDate(start, { day: 'numeric', month: 'short' })} al {formatDate(end, { day: 'numeric', month: 'short', year: 'numeric' })}
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', minWidth: 240, textAlign: 'center' }}>
+        {label && <span style={{ color: 'var(--accent)', marginRight: 6 }}>{label} —</span>}
+        {formatDate(start, { day: 'numeric', month: 'short' })} al {formatDate(end, { day: 'numeric', month: 'short', year: 'numeric' })}
       </span>
-      <button onClick={() => onChange(offset + 1)} disabled={offset >= 0} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', width: 32, height: 32, cursor: offset >= 0 ? 'not-allowed' : 'pointer', color: offset >= 0 ? 'var(--text-tertiary)' : 'var(--text-secondary)', fontSize: 16, opacity: offset >= 0 ? 0.4 : 1 }}>›</button>
+      <button onClick={() => onChange(offset + 1)} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', width: 32, height: 32, cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 16 }}>›</button>
     </div>
   )
 }

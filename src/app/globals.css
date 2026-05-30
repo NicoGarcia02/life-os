@@ -247,10 +247,10 @@ body {
     padding: 4px 3px !important;
   }
 
-  /* Modal: avoid overlap with fixed header */
+  /* Modal: dar espacio al header fijo pero mantener centrado */
   .modal-overlay {
-    padding-top: 72px;
-    align-items: flex-start;
+    padding: 72px 12px 12px;
+    align-items: center;
   }
 }
 

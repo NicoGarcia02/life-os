@@ -36,7 +36,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
           boxShadow: 'var(--shadow-elevated)',
           width: '100%',
           maxWidth: widths[size],
-          maxHeight: '90vh',
+          maxHeight: 'calc(100dvh - 96px)',
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
