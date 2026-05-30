@@ -8,6 +8,7 @@ const NAV = [
   { href: '/habits', icon: '✓', label: 'Hábitos' },
   { href: '/sleep', icon: '◑', label: 'Sueño' },
   { href: '/tasks', icon: '☑', label: 'Tareas' },
+  { href: '/weekly-tasks', icon: '⊟', label: 'Semana' },
   { href: '/finances', icon: '$', label: 'Finanzas' },
   { href: '/notes', icon: '✎', label: 'Notas' },
   { href: '/journal', icon: '◈', label: 'Diario' },
