@@ -23,15 +23,23 @@ export function useCalendar() {
     setLoading(false)
   }, [])
 
-  const addEvent = useCallback(async (event: Omit<CalendarEvent, 'id' | 'user_id' | 'created_at'>) => {
+  const addEvent = useCallback(async (event: Omit<CalendarEvent, 'id' | 'user_id' | 'created_at'>): Promise<string | null> => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('events').insert({ ...event, user_id: user.id })
-    const d = new Date(event.date)
-    const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]
+    if (!user) return 'No autenticado'
+    const { error } = await supabase.from('events').insert({ ...event, user_id: user.id })
+    if (error) { console.error('[calendar] insert error:', error.message, error.details); return error.message }
+    const [y, m] = event.date.split('-').map(Number)
+    const start = `${y}-${String(m).padStart(2, '0')}-01`
+    const end = new Date(y, m, 0).toISOString().split('T')[0]
     await fetchEvents(start, end)
+    return null
   }, [fetchEvents])
+
+  const updateEvent = useCallback(async (id: string, updates: Partial<Omit<CalendarEvent, 'id' | 'user_id' | 'created_at'>>): Promise<string | null> => {
+    const { error } = await supabase.from('events').update(updates).eq('id', id)
+    if (error) { console.error('[calendar] update error:', error.message); return error.message }
+    return null
+  }, [])
 
   const deleteEvent = useCallback(async (id: string) => {
     await supabase.from('events').delete().eq('id', id)
@@ -44,5 +52,5 @@ export function useCalendar() {
     fetchEvents(start, end)
   }, [fetchEvents])
 
-  return { events, loading, fetchEvents, addEvent, deleteEvent }
+  return { events, loading, fetchEvents, addEvent, updateEvent, deleteEvent }
 }

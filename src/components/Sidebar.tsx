@@ -15,7 +15,12 @@ const NAV = [
   { href: '/weekly', icon: '▤', label: 'Resumen' },
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -26,30 +31,15 @@ export default function Sidebar() {
     router.refresh()
   }
 
-  return (
-    <aside style={{
-      width: 220,
-      flexShrink: 0,
-      background: 'var(--bg-surface)',
-      borderRight: '1px solid var(--border-subtle)',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      position: 'sticky',
-      top: 0,
-    }}>
-      {/* Logo */}
-      <div style={{
-        padding: '20px 16px 16px',
-        borderBottom: '1px solid var(--border-subtle)',
-      }}>
+  const content = (
+    <>
+      <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
           Life <span style={{ color: 'var(--accent)' }}>OS</span>
         </div>
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Sistema personal</div>
       </div>
 
-      {/* Navigation */}
       <nav style={{ flex: 1, padding: '8px 8px', overflowY: 'auto' }}>
         {NAV.map(item => {
           const active = pathname === item.href
@@ -57,6 +47,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -79,7 +70,6 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
       <div style={{ padding: '12px 8px', borderTop: '1px solid var(--border-subtle)' }}>
         <button
           onClick={handleLogout}
@@ -103,6 +93,15 @@ export default function Sidebar() {
           Cerrar sesión
         </button>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      <div className={`sidebar-backdrop${isOpen ? ' open' : ''}`} onClick={onClose} />
+      <aside className={`sidebar${isOpen ? ' open' : ''}`}>
+        {content}
+      </aside>
+    </>
   )
 }

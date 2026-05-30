@@ -21,11 +21,13 @@ export function useFinances() {
     setLoading(false)
   }, [])
 
-  const addTransaction = useCallback(async (tx: Pick<Transaction, 'description' | 'amount' | 'type' | 'date' | 'category_id'>) => {
+  const addTransaction = useCallback(async (tx: Pick<Transaction, 'description' | 'amount' | 'type' | 'date' | 'category_id'>): Promise<string | null> => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('transactions').insert({ ...tx, user_id: user.id })
+    if (!user) return 'No autenticado'
+    const { error } = await supabase.from('transactions').insert({ ...tx, user_id: user.id })
+    if (error) { console.error('[finances] insert error:', error.message, error.details); return error.message }
     await fetchAll()
+    return null
   }, [fetchAll])
 
   const deleteTransaction = useCallback(async (id: string) => {
@@ -45,6 +47,13 @@ export function useFinances() {
     await fetchAll()
   }, [fetchAll])
 
+  const updateTransaction = useCallback(async (id: string, updates: Partial<Pick<Transaction, 'description' | 'amount' | 'type' | 'date' | 'category_id'>>): Promise<string | null> => {
+    const { error } = await supabase.from('transactions').update(updates).eq('id', id)
+    if (error) { console.error('[finances] update error:', error.message, error.details); return error.message }
+    await fetchAll()
+    return null
+  }, [fetchAll])
+
   useEffect(() => { fetchAll() }, [fetchAll])
 
   const now = new Date()
@@ -56,6 +65,6 @@ export function useFinances() {
 
   return {
     categories, transactions, monthTx, monthIncome, monthExpense, monthBalance,
-    loading, addTransaction, deleteTransaction, addCategory, updateCategory, refetch: fetchAll
+    loading, addTransaction, deleteTransaction, updateTransaction, addCategory, updateCategory, refetch: fetchAll
   }
 }

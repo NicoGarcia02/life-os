@@ -20,15 +20,19 @@ export function useNotes() {
     setLoading(false)
   }, [])
 
-  const upsertNote = useCallback(async (note: Partial<Note> & { title: string }) => {
+  const upsertNote = useCallback(async (note: Partial<Note> & { title: string }): Promise<string | null> => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) return 'No autenticado'
+    const now = new Date().toISOString()
     if (note.id) {
-      await supabase.from('notes').update({ ...note, updated_at: new Date().toISOString() }).eq('id', note.id)
+      const { error } = await supabase.from('notes').update({ ...note, updated_at: now }).eq('id', note.id)
+      if (error) { console.error('[notes] update error:', error.message, error.details); return error.message }
     } else {
-      await supabase.from('notes').insert({ ...note, user_id: user.id })
+      const { error } = await supabase.from('notes').insert({ ...note, user_id: user.id, updated_at: now })
+      if (error) { console.error('[notes] insert error:', error.message, error.details); return error.message }
     }
     await fetchNotes()
+    return null
   }, [fetchNotes])
 
   const deleteNote = useCallback(async (id: string) => {

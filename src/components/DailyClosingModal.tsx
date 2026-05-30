@@ -4,7 +4,7 @@ import Modal from '@/components/ui/Modal'
 import Btn from '@/components/ui/Btn'
 import { Input, Textarea } from '@/components/ui/Input'
 import { useDailyClosing } from '@/hooks/useDailyClosing'
-import { today, calcHoursSlept } from '@/lib/utils'
+import { today, entryHours } from '@/lib/utils'
 import type { SleepEntry } from '@/lib/types'
 
 interface DailyClosingModalProps {
@@ -24,7 +24,7 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
   const [selectedDate, setSelectedDate] = useState(today())
   const [step, setStep] = useState(1)
   const [existingSleep, setExistingSleep] = useState<SleepEntry | null>(null)
-  const [bedtime, setBedtime] = useState('23:00')
+  const [sleepTime, setSleepTime] = useState('23:00')
   const [wakeTime, setWakeTime] = useState('07:00')
   const [quality, setQuality] = useState(4)
   const [rating, setRating] = useState<number | null>(null)
@@ -106,14 +106,14 @@ export default function DailyClosingModal({ isOpen, onClose }: DailyClosingModal
             }}>
               <div style={{ fontSize: 20, marginBottom: 6 }}>✓</div>
               <div style={{ fontSize: 14, color: 'var(--green)', fontWeight: 500 }}>
-                Sueño ya registrado: {existingSleep.hours_slept}h · Calidad {existingSleep.quality}/5
+                Sueño ya registrado: {entryHours(existingSleep)}h · Calidad {existingSleep.quality}/5
               </div>
             </div>
           ) : (
             <>
               <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Registrá tu sueño de anoche para completar el día.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Input label="Me dormí" type="time" value={bedtime} onChange={e => setBedtime(e.target.value)} />
+                <Input label="Me dormí" type="time" value={sleepTime} onChange={e => setSleepTime(e.target.value)} />
                 <Input label="Me desperté" type="time" value={wakeTime} onChange={e => setWakeTime(e.target.value)} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

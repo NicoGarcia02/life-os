@@ -24,7 +24,9 @@ export default function NotesPage() {
   const [editNote, setEditNote] = useState<Note | null>(null)
   const [form, setForm] = useState({ title: '', content: '', category: 'General' })
   const [saving, setSaving] = useState(false)
+  const [noteError, setNoteError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [viewNote, setViewNote] = useState<Note | null>(null)
 
   function openNew() {
     setEditNote(null)
@@ -41,9 +43,11 @@ export default function NotesPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await upsertNote(editNote ? { ...form, id: editNote.id } : form)
-    setModalOpen(false)
+    setNoteError(null)
+    const err = await upsertNote(editNote ? { ...form, id: editNote.id } : form)
     setSaving(false)
+    if (err) { setNoteError(err); return }
+    setModalOpen(false)
   }
 
   const filtered = useMemo(() => {
@@ -57,21 +61,20 @@ export default function NotesPage() {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto' }} className="animate-fade">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Notas</h1>
-          <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 4 }}>{filtered.length} nota{filtered.length !== 1 ? 's' : ''}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input
-            className="input-base"
-            placeholder="Buscar notas..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ width: 200 }}
-          />
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Notas</h1>
+            <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 4 }}>{filtered.length} nota{filtered.length !== 1 ? 's' : ''}</p>
+          </div>
           <Btn variant="primary" onClick={openNew}>+ Nueva nota</Btn>
         </div>
+        <input
+          className="input-base"
+          placeholder="Buscar notas..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
       </div>
 
       {filtered.length === 0 && !search ? (
@@ -111,7 +114,7 @@ export default function NotesPage() {
                 breakInside: 'avoid',
                 cursor: 'pointer',
               }}
-              onClick={() => openEdit(note)}
+              onClick={() => setViewNote(note)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 600, flex: 1, marginRight: 8 }}>{note.title}</h3>
@@ -142,7 +145,7 @@ export default function NotesPage() {
                   {note.category}
                 </span>
                 <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                  {formatDate(note.updated_at || note.created_at)}
+                  {formatDate((note.updated_at || note.created_at).slice(0, 10))}
                 </span>
               </div>
             </div>
@@ -150,7 +153,34 @@ export default function NotesPage() {
         </div>
       )}
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editNote ? 'Editar nota' : 'Nueva nota'} size="md">
+      {/* View note modal */}
+      <Modal isOpen={!!viewNote} onClose={() => setViewNote(null)} title={viewNote?.title ?? ''} size="md">
+        {viewNote && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <span style={{
+                fontSize: 12, fontWeight: 600, padding: '3px 8px', borderRadius: 4,
+                background: `${CAT_COLORS[viewNote.category ?? 'General']}22`,
+                color: CAT_COLORS[viewNote.category ?? 'General'],
+              }}>{viewNote.category}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                {formatDate((viewNote.updated_at || viewNote.created_at).slice(0, 10))}
+              </span>
+            </div>
+            {viewNote.content && (
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                {viewNote.content}
+              </p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
+              <Btn variant="ghost" onClick={() => setViewNote(null)}>Cerrar</Btn>
+              <Btn variant="primary" onClick={() => { const n = viewNote; setViewNote(null); openEdit(n) }}>Editar</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={modalOpen} onClose={() => { setModalOpen(false); setNoteError(null) }} title={editNote ? 'Editar nota' : 'Nueva nota'} size="md">
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
@@ -161,9 +191,14 @@ export default function NotesPage() {
             </SelectInput>
           </div>
           <Textarea label="Contenido" value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} placeholder="Escribí tu nota..." style={{ minHeight: 200 }} />
+          {noteError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--red)' }}>
+              {noteError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
             {editNote && <Btn variant="danger" type="button" onClick={() => { deleteNote(editNote.id); setModalOpen(false) }}>Eliminar</Btn>}
-            <Btn variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancelar</Btn>
+            <Btn variant="ghost" type="button" onClick={() => { setModalOpen(false); setNoteError(null) }}>Cancelar</Btn>
             <Btn variant="primary" type="submit" loading={saving}>Guardar</Btn>
           </div>
         </form>

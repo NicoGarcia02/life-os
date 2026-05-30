@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import TabBar from '@/components/ui/TabBar'
 import SectionHeader from '@/components/ui/SectionHeader'
 import Modal from '@/components/ui/Modal'
@@ -15,13 +15,15 @@ const DAYS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const TAGS: CalendarEvent['tag'][] = ['Trabajo', 'Personal', 'Salud', 'Social', 'Educación']
 
 export default function CalendarPage() {
-  const { events, loading, fetchEvents, addEvent, deleteEvent } = useCalendar()
+  const { events, loading, fetchEvents, addEvent, updateEvent, deleteEvent } = useCalendar()
   const [tab, setTab] = useState('mes')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [form, setForm] = useState({ title: '', date: today(), time: '', duration: '60', tag: 'Personal' as CalendarEvent['tag'] })
+  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null)
   const [saving, setSaving] = useState(false)
+  const [eventError, setEventError] = useState<string | null>(null)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -46,11 +48,8 @@ export default function CalendarPage() {
   }
 
   const todayStr = today()
-  const todayEvents = events.filter(e => e.date === todayStr)
 
   // Agenda: group events by date
-  const agendaStart = new Date(year, month, 1).toISOString().split('T')[0]
-  const agendaEnd = new Date(year, month + 1, 0).toISOString().split('T')[0]
   const agendaEvents = events.sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date)
     return (a.time ?? '').localeCompare(b.time ?? '')
@@ -62,23 +61,38 @@ export default function CalendarPage() {
     groupedByDate[ev.date].push(ev)
   })
 
-  async function handleAddEvent(e: React.FormEvent) {
+  async function handleSaveEvent(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setSaving(true)
-    await addEvent({
+    setEventError(null)
+    const payload = {
       title: form.title,
       date: form.date,
       time: form.time || null,
       duration: parseInt(form.duration) || 60,
       tag: form.tag,
-    })
-    setModalOpen(false)
+    }
+    const err = editEvent ? await updateEvent(editEvent.id, payload) : await addEvent(payload)
     setSaving(false)
+    if (err) { setEventError(err); return }
+    const [y, m] = form.date.split('-').map(Number)
+    const start = `${y}-${String(m).padStart(2, '0')}-01`
+    const end = new Date(y, m, 0).toISOString().split('T')[0]
+    await fetchEvents(start, end)
+    setModalOpen(false)
+    setEditEvent(null)
     setForm({ title: '', date: today(), time: '', duration: '60', tag: 'Personal' })
   }
 
   function openNew(date?: string) {
+    setEditEvent(null)
     setForm({ title: '', date: date ?? today(), time: '', duration: '60', tag: 'Personal' })
+    setModalOpen(true)
+  }
+
+  function openEdit(ev: CalendarEvent) {
+    setEditEvent(ev)
+    setForm({ title: ev.title, date: ev.date, time: ev.time ?? '', duration: String(ev.duration ?? 60), tag: ev.tag })
     setModalOpen(true)
   }
 
@@ -130,9 +144,11 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={day}
+                    className="cal-cell"
                     onClick={() => setSelectedDay(isSelected ? null : dateStr)}
                     style={{
-                      minHeight: 80,
+                      height: 80,
+                      overflow: 'hidden',
                       padding: '8px 6px',
                       borderRadius: 'var(--radius-sm)',
                       background: isSelected ? 'var(--accent-muted)' : isToday ? 'var(--bg-hover)' : 'var(--bg-elevated)',
@@ -183,9 +199,10 @@ export default function CalendarPage() {
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 14, fontWeight: 500 }}>{ev.title}</div>
                             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                              {ev.time ? ev.time.slice(0, 5) : 'Todo el día'} · {ev.duration}min · {ev.tag}
+                              {ev.time ? ev.time.slice(0, 5) : 'Todo el día'}{ev.duration ? ` · ${ev.duration}min` : ''} · {ev.tag}
                             </div>
                           </div>
+                          <Btn variant="ghost" size="sm" onClick={() => openEdit(ev)}>✎</Btn>
                           <Btn variant="danger" size="sm" onClick={async () => { await deleteEvent(ev.id); fetchEvents(`${year}-${String(month + 1).padStart(2, '0')}-01`, new Date(year, month + 1, 0).toISOString().split('T')[0]) }}>✕</Btn>
                         </div>
                       ))}
@@ -218,7 +235,7 @@ export default function CalendarPage() {
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 14, fontWeight: 500 }}>{ev.title}</div>
                             <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
-                              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.duration}min</span>
+                              {ev.duration && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.duration}min</span>}
                               <span style={{
                                 fontSize: 11, padding: '1px 6px', borderRadius: 3,
                                 background: `${TAG_COLORS[ev.tag] ?? 'var(--accent)'}22`,
@@ -226,6 +243,7 @@ export default function CalendarPage() {
                               }}>{ev.tag}</span>
                             </div>
                           </div>
+                          <Btn variant="ghost" size="sm" onClick={() => openEdit(ev)}>✎</Btn>
                           <Btn variant="danger" size="sm" onClick={async () => { await deleteEvent(ev.id); fetchEvents(`${year}-${String(month + 1).padStart(2, '0')}-01`, new Date(year, month + 1, 0).toISOString().split('T')[0]) }}>✕</Btn>
                         </div>
                       ))}
@@ -238,8 +256,8 @@ export default function CalendarPage() {
         )}
       </div>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nuevo evento" size="sm">
-        <form onSubmit={handleAddEvent} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <Modal isOpen={modalOpen} onClose={() => { setModalOpen(false); setEditEvent(null); setEventError(null) }} title={editEvent ? 'Editar evento' : 'Nuevo evento'} size="sm">
+        <form onSubmit={handleSaveEvent} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Input label="Título" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} required placeholder="Nombre del evento" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Input label="Fecha" type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
@@ -251,9 +269,14 @@ export default function CalendarPage() {
               {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
             </SelectInput>
           </div>
+          {eventError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--red)' }}>
+              {eventError}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-            <Btn variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancelar</Btn>
-            <Btn variant="primary" type="submit" loading={saving}>Crear evento</Btn>
+            <Btn variant="ghost" type="button" onClick={() => { setModalOpen(false); setEditEvent(null); setEventError(null) }}>Cancelar</Btn>
+            <Btn variant="primary" type="submit" loading={saving}>{editEvent ? 'Guardar' : 'Crear evento'}</Btn>
           </div>
         </form>
       </Modal>

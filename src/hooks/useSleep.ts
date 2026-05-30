@@ -9,7 +9,7 @@ export function useSleep() {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  const fetchEntries = useCallback(async (days = 30) => {
+  const fetchEntries = useCallback(async (days = 60) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const start = addDays(today(), -days)
@@ -23,22 +23,35 @@ export function useSleep() {
     setLoading(false)
   }, [])
 
-  const upsertEntry = useCallback(async (entry: Partial<SleepEntry> & { date: string }) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('sleep_entries').upsert(
+  const upsertEntry = useCallback(async (entry: Partial<SleepEntry> & { date: string }): Promise<string | null> => {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error('[sleep] auth error:', authError)
+      return 'No autenticado. Iniciá sesión nuevamente.'
+    }
+    const { error } = await supabase.from('sleep_entries').upsert(
       { ...entry, user_id: user.id },
       { onConflict: 'user_id,date' }
     )
+    if (error) {
+      console.error('[sleep] upsert error:', { message: error.message, details: error.details, hint: error.hint, code: error.code })
+      return error.message || 'Error al guardar el registro de sueno'
+    }
     await fetchEntries()
+    return null
   }, [fetchEntries])
 
-  const deleteEntry = useCallback(async (id: string) => {
-    await supabase.from('sleep_entries').delete().eq('id', id)
+  const deleteEntry = useCallback(async (id: string): Promise<string | null> => {
+    const { error } = await supabase.from('sleep_entries').delete().eq('id', id)
+    if (error) {
+      console.error('[sleep] delete error:', { message: error.message, details: error.details, hint: error.hint, code: error.code })
+      return error.message || 'Error al eliminar el registro'
+    }
     await fetchEntries()
+    return null
   }, [fetchEntries])
 
-  useEffect(() => { fetchEntries() }, [fetchEntries])
+  useEffect(() => { fetchEntries(60) }, [fetchEntries])
 
   return { entries, loading, upsertEntry, deleteEntry, refetch: fetchEntries }
 }

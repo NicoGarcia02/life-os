@@ -29,6 +29,11 @@ export function calcHoursSlept(bedtime: string, wakeTime: string): number {
   return Math.round((mins / 60) * 10) / 10
 }
 
+export function entryHours(entry: { sleep_time: string | null; wake_time: string | null }): number {
+  if (!entry.sleep_time || !entry.wake_time) return 0
+  return calcHoursSlept(entry.sleep_time, entry.wake_time)
+}
+
 export function getWeekRange(offsetWeeks = 0): { start: string; end: string } {
   const now = new Date()
   const day = now.getDay()
@@ -126,3 +131,5 @@ export const TAG_COLORS: Record<string, string> = {
 export const NOTE_CATEGORIES = ['General', 'Ideas', 'Trabajo', 'Personal', 'Salud', 'Finanzas']
 
 export const EMOJI_OPTIONS = ['💰','🍕','🎮','📚','💪','🧘','🚗','✈️','🏠','👕','🛒','🍺','☕','🎵','💊','🐕','🎁','📱','💻','⚡','🎯','🔑','🌿','🍎','🏃']
+
+export const HABIT_EMOJI_OPTIONS = ['✅','💪','🏃','🧘','📚','💤','🥗','💧','🎯','🔥','⚡','🌱','🎵','✍️','🧹','💻','📝','🌅','🚴','🏋️','🧠','❤️','🤸','🌿','😊','🦷','🚿','🍎','🥊','🏊','🧴','🧩','🎨','📖','🗓️']

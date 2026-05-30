@@ -1,11 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import StatCard from '@/components/ui/StatCard'
 import SectionHeader from '@/components/ui/SectionHeader'
 import ProgressBar from '@/components/ui/ProgressBar'
 import ScoreRing from '@/components/ui/ScoreRing'
-import { getWeekRange, getDaysInRange, formatDate, formatCurrency, calcDailyScore, scoreColor } from '@/lib/utils'
+import { getWeekRange, getDaysInRange, formatDate, formatCurrency, calcDailyScore, scoreColor, entryHours } from '@/lib/utils'
 import type { Habit, HabitEntry, SleepEntry, Task, Transaction, DailyClosing } from '@/lib/types'
 
 const RATING_EMOJIS: Record<number, string> = { 1: '😫', 2: '😕', 3: '😐', 4: '🙂', 5: '🤩' }
@@ -89,7 +88,7 @@ export default function WeeklyPage() {
     return calcDailyScore({
       habitsCompleted: dayEntries.length,
       habitsTotal: habits.length,
-      sleepHours: sleep?.hours_slept ?? null,
+      sleepHours: sleep ? entryHours(sleep) : null,
       tasksCompleted: dayTasks.filter(t => t.completed).length,
       tasksTotal: dayTasks.length,
     })
@@ -104,13 +103,13 @@ export default function WeeklyPage() {
 
   // Sleep
   const avgSleepHours = sleepEntries.length
-    ? Math.round((sleepEntries.reduce((s, e) => s + (e.hours_slept ?? 0), 0) / sleepEntries.length) * 10) / 10
+    ? Math.round((sleepEntries.reduce((s, e) => s + entryHours(e), 0) / sleepEntries.length) * 10) / 10
     : 0
   const avgSleepQuality = sleepEntries.length
     ? Math.round((sleepEntries.reduce((s, e) => s + (e.quality ?? 0), 0) / sleepEntries.length) * 10) / 10
     : 0
-  const bestNight = sleepEntries.reduce((best, e) => (!best || (e.hours_slept ?? 0) > (best.hours_slept ?? 0)) ? e : best, null as SleepEntry | null)
-  const worstNight = sleepEntries.reduce((worst, e) => (!worst || (e.hours_slept ?? 0) < (worst.hours_slept ?? 0)) ? e : worst, null as SleepEntry | null)
+  const bestNight = sleepEntries.reduce((best, e) => (!best || entryHours(e) > entryHours(best)) ? e : best, null as SleepEntry | null)
+  const worstNight = sleepEntries.reduce((worst, e) => (!worst || entryHours(e) < entryHours(worst)) ? e : worst, null as SleepEntry | null)
 
   // Tasks
   const weekTasks = tasks.filter(t => t.due_date && t.due_date >= weekStart && t.due_date <= weekEnd)
@@ -132,7 +131,7 @@ export default function WeeklyPage() {
   // Patterns
   const goodSleepDays = weekDays.filter(day => {
     const sleep = sleepEntries.find(s => s.date === day)
-    return sleep && (sleep.hours_slept ?? 0) >= 7
+    return sleep && entryHours(sleep) >= 7
   })
   const goodSleepHabitPct = goodSleepDays.length > 0
     ? Math.round(goodSleepDays.reduce((s, day) => {
@@ -166,7 +165,7 @@ export default function WeeklyPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="grid-2" style={{ gap: 16, marginBottom: 16 }}>
         {/* Hábitos */}
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="Metas semanales" />
@@ -215,10 +214,10 @@ export default function WeeklyPage() {
             </div>
           </div>
           {bestNight && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
-            🌟 Mejor noche: {bestNight.hours_slept}h el {formatDate(bestNight.date, { weekday: 'short', day: 'numeric' })}
+            🌟 Mejor noche: {entryHours(bestNight)}h el {formatDate(bestNight.date, { weekday: 'short', day: 'numeric' })}
           </div>}
           {worstNight && bestNight !== worstNight && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
-            😓 Peor noche: {worstNight.hours_slept}h el {formatDate(worstNight.date, { weekday: 'short', day: 'numeric' })}
+            😓 Peor noche: {entryHours(worstNight)}h el {formatDate(worstNight.date, { weekday: 'short', day: 'numeric' })}
           </div>}
           {sleepEntries.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Sin registros esta semana</div>}
         </div>
@@ -226,7 +225,7 @@ export default function WeeklyPage() {
         {/* Tareas */}
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="Tareas" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div className="grid-3" style={{ gap: 12, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Completadas</div>
               <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>{weekTasksCompleted}</div>
