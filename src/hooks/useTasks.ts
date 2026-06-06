@@ -22,7 +22,7 @@ export function useTasks() {
     setLoading(false)
   }, [])
 
-  const addTask = useCallback(async (task: Pick<Task, 'title' | 'description' | 'priority' | 'due_date'>) => {
+  const addTask = useCallback(async (task: Pick<Task, 'title' | 'description' | 'priority' | 'due_date' | 'recurring' | 'recurrence_pattern' | 'label'>) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await supabase.from('tasks').insert({ ...task, user_id: user.id })

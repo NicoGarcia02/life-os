@@ -35,6 +35,8 @@ function PriorityBadge({ priority }: { priority: Task['priority'] }) {
   )
 }
 
+const RECURRENCE_LABEL: Record<string, string> = { daily: 'Diaria', weekly: 'Semanal', monthly: 'Mensual' }
+
 function TaskRow({ task, onToggle, onEdit, onDelete }: {
   task: Task
   onToggle: () => void
@@ -56,6 +58,16 @@ function TaskRow({ task, onToggle, onEdit, onDelete }: {
             {task.title}
           </span>
           <PriorityBadge priority={task.priority} />
+          {task.label && (
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: 'var(--accent-muted)', color: 'var(--accent)', letterSpacing: '0.03em' }}>
+              {task.label}
+            </span>
+          )}
+          {task.recurring && task.recurrence_pattern && (
+            <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 4, background: 'rgba(99,102,241,0.12)', color: '#818cf8', letterSpacing: '0.03em' }}>
+              🔁 {RECURRENCE_LABEL[task.recurrence_pattern]}
+            </span>
+          )}
         </div>
         {task.description && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.description}</div>}
         {task.due_date && (
@@ -75,28 +87,37 @@ export default function TasksPage() {
   const [tab, setTab] = useState('hoy')
   const [modalOpen, setModalOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
-  const [form, setForm] = useState({ title: '', description: '', priority: 'media' as Task['priority'], due_date: '' })
+  const [form, setForm] = useState({ title: '', description: '', priority: 'media' as Task['priority'], due_date: '', label: '', recurring: false, recurrence_pattern: 'weekly' as Task['recurrence_pattern'] })
   const [saving, setSaving] = useState(false)
 
   function openNew() {
     setEditTask(null)
-    setForm({ title: '', description: '', priority: 'media', due_date: '' })
+    setForm({ title: '', description: '', priority: 'media', due_date: '', label: '', recurring: false, recurrence_pattern: 'weekly' })
     setModalOpen(true)
   }
 
   function openEdit(task: Task) {
     setEditTask(task)
-    setForm({ title: task.title, description: task.description ?? '', priority: task.priority, due_date: task.due_date ?? '' })
+    setForm({ title: task.title, description: task.description ?? '', priority: task.priority, due_date: task.due_date ?? '', label: task.label ?? '', recurring: task.recurring ?? false, recurrence_pattern: task.recurrence_pattern ?? 'weekly' })
     setModalOpen(true)
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
+    const payload = {
+      title: form.title,
+      description: form.description || null,
+      priority: form.priority,
+      due_date: form.due_date || null,
+      label: form.label.trim() || null,
+      recurring: form.recurring,
+      recurrence_pattern: form.recurring ? form.recurrence_pattern : null,
+    }
     if (editTask) {
-      await updateTask(editTask.id, { ...form, due_date: form.due_date || null })
+      await updateTask(editTask.id, payload)
     } else {
-      await addTask({ ...form, due_date: form.due_date || null })
+      await addTask(payload)
     }
     setModalOpen(false)
     setSaving(false)
@@ -222,6 +243,33 @@ export default function TasksPage() {
               <option value="baja">Baja</option>
             </SelectInput>
             <Input label="Fecha límite" type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))} />
+          </div>
+          <Input label="Etiqueta / Proyecto" value={form.label} onChange={e => setForm(p => ({ ...p, label: e.target.value }))} placeholder="Ej: Trabajo, Personal, Estudio..." />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <div
+                onClick={() => setForm(p => ({ ...p, recurring: !p.recurring }))}
+                style={{
+                  width: 40, height: 22, borderRadius: 11,
+                  background: form.recurring ? 'var(--accent)' : 'var(--border-default)',
+                  position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background 0.2s',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 3, left: form.recurring ? 21 : 3,
+                  width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                  transition: 'left 0.2s',
+                }} />
+              </div>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', userSelect: 'none' }}>Tarea recurrente</span>
+            </label>
+            {form.recurring && (
+              <SelectInput label="Frecuencia" value={form.recurrence_pattern ?? 'weekly'} onChange={e => setForm(p => ({ ...p, recurrence_pattern: e.target.value as Task['recurrence_pattern'] }))}>
+                <option value="daily">Diaria</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensual</option>
+              </SelectInput>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
             <Btn variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancelar</Btn>

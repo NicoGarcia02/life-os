@@ -37,7 +37,7 @@ function loadCustomCats(): string[] {
 }
 
 export default function NotesPage() {
-  const { notes, loading, upsertNote, deleteNote } = useNotes()
+  const { notes, loading, upsertNote, deleteNote, togglePin } = useNotes()
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editNote, setEditNote] = useState<Note | null>(null)
@@ -157,11 +157,20 @@ export default function NotesPage() {
                 onClick={() => setViewNote(note)}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, flex: 1, marginRight: 8 }}>{note.title}</h3>
-                  <button
-                    onClick={e => { e.stopPropagation(); setConfirmDelete(note.id) }}
-                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '2px 4px', borderRadius: 4, flexShrink: 0 }}
-                  >✕</button>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, flex: 1, marginRight: 8 }}>
+                    {note.pinned && <span style={{ fontSize: 12, marginRight: 4 }}>📌</span>}{note.title}
+                  </h3>
+                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); togglePin(note.id, !note.pinned) }}
+                      title={note.pinned ? 'Desfijar' : 'Fijar'}
+                      style={{ background: note.pinned ? 'var(--accent-muted)' : 'none', border: 'none', color: note.pinned ? 'var(--accent)' : 'var(--text-tertiary)', cursor: 'pointer', fontSize: 12, padding: '2px 5px', borderRadius: 4 }}
+                    >📌</button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setConfirmDelete(note.id) }}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '2px 4px', borderRadius: 4 }}
+                    >✕</button>
+                  </div>
                 </div>
                 {note.content && (
                   <p style={{

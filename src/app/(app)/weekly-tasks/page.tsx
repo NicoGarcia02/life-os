@@ -63,7 +63,7 @@ export default function WeeklyTasksPage() {
     if (editTask) {
       await updateTask(editTask.id, { ...form, due_date: form.due_date || null })
     } else {
-      await addTask({ ...form, due_date: form.due_date || null })
+      await addTask({ ...form, due_date: form.due_date || null, recurring: false, recurrence_pattern: null, label: null })
     }
     setModalOpen(false)
     setSaving(false)

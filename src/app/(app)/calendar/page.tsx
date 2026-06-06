@@ -20,7 +20,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
-  const [form, setForm] = useState({ title: '', date: today(), time: '', duration: '60', tag: 'Personal' as CalendarEvent['tag'] })
+  const [form, setForm] = useState({ title: '', date: today(), time: '', duration: '60', tag: 'Personal' as CalendarEvent['tag'], description: '' })
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null)
   const [saving, setSaving] = useState(false)
   const [eventError, setEventError] = useState<string | null>(null)
@@ -71,6 +71,7 @@ export default function CalendarPage() {
       time: form.time || null,
       duration: parseInt(form.duration) || 60,
       tag: form.tag,
+      description: form.description || null,
     }
     const err = editEvent ? await updateEvent(editEvent.id, payload) : await addEvent(payload)
     setSaving(false)
@@ -81,18 +82,18 @@ export default function CalendarPage() {
     await fetchEvents(start, end)
     setModalOpen(false)
     setEditEvent(null)
-    setForm({ title: '', date: today(), time: '', duration: '60', tag: 'Personal' })
+    setForm({ title: '', date: today(), time: '', duration: '60', tag: 'Personal', description: '' })
   }
 
   function openNew(date?: string) {
     setEditEvent(null)
-    setForm({ title: '', date: date ?? today(), time: '', duration: '60', tag: 'Personal' })
+    setForm({ title: '', date: date ?? today(), time: '', duration: '60', tag: 'Personal', description: '' })
     setModalOpen(true)
   }
 
   function openEdit(ev: CalendarEvent) {
     setEditEvent(ev)
-    setForm({ title: ev.title, date: ev.date, time: ev.time ?? '', duration: String(ev.duration ?? 60), tag: ev.tag })
+    setForm({ title: ev.title, date: ev.date, time: ev.time ?? '', duration: String(ev.duration ?? 60), tag: ev.tag, description: ev.description ?? '' })
     setModalOpen(true)
   }
 
@@ -201,6 +202,7 @@ export default function CalendarPage() {
                             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
                               {ev.time ? ev.time.slice(0, 5) : 'Todo el día'}{ev.duration ? ` · ${ev.duration}min` : ''} · {ev.tag}
                             </div>
+                            {ev.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, whiteSpace: 'pre-wrap' }}>{ev.description}</div>}
                           </div>
                           <Btn variant="ghost" size="sm" onClick={() => openEdit(ev)}>✎</Btn>
                           <Btn variant="danger" size="sm" onClick={async () => { await deleteEvent(ev.id); fetchEvents(`${year}-${String(month + 1).padStart(2, '0')}-01`, new Date(year, month + 1, 0).toISOString().split('T')[0]) }}>✕</Btn>
@@ -242,6 +244,7 @@ export default function CalendarPage() {
                                 color: TAG_COLORS[ev.tag] ?? 'var(--accent)',
                               }}>{ev.tag}</span>
                             </div>
+                            {ev.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5, whiteSpace: 'pre-wrap' }}>{ev.description}</div>}
                           </div>
                           <Btn variant="ghost" size="sm" onClick={() => openEdit(ev)}>✎</Btn>
                           <Btn variant="danger" size="sm" onClick={async () => { await deleteEvent(ev.id); fetchEvents(`${year}-${String(month + 1).padStart(2, '0')}-01`, new Date(year, month + 1, 0).toISOString().split('T')[0]) }}>✕</Btn>
@@ -268,6 +271,11 @@ export default function CalendarPage() {
             <SelectInput label="Etiqueta" value={form.tag} onChange={e => setForm(p => ({ ...p, tag: e.target.value as CalendarEvent['tag'] }))}>
               {TAGS.map(t => <option key={t} value={t}>{t}</option>)}
             </SelectInput>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Descripción</label>
+            <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Notas, links, contexto..." rows={3}
+              style={{ width: '100%', background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 13, padding: '9px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           {eventError && (
             <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--red)' }}>

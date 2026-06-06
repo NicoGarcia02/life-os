@@ -16,6 +16,7 @@ export function useNotes() {
       .from('notes')
       .select('*')
       .eq('user_id', user.id)
+      .order('pinned', { ascending: false })
       .order('updated_at', { ascending: false })
     setNotes(data ?? [])
     setLoading(false)
@@ -41,8 +42,13 @@ export function useNotes() {
     await fetchNotes()
   }, [fetchNotes])
 
+  const togglePin = useCallback(async (id: string, pinned: boolean) => {
+    await supabase.from('notes').update({ pinned }).eq('id', id)
+    await fetchNotes()
+  }, [fetchNotes])
+
   useEffect(() => { fetchNotes() }, [fetchNotes])
   useRefetchOnFocus(fetchNotes)
 
-  return { notes, loading, upsertNote, deleteNote, refetch: fetchNotes }
+  return { notes, loading, upsertNote, deleteNote, togglePin, refetch: fetchNotes }
 }
