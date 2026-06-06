@@ -113,12 +113,6 @@ export default function FinancesPage() {
   const selExpense = selTx.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0)
   const selBalance = selIncome - selExpense
 
-  // Projection (current month only)
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const daysPassed = now.getDate()
-  const projectedExpense = daysPassed > 0 ? (selExpense / daysPassed) * daysInMonth : 0
-  const totalBudget = categories.filter(c => c.type === 'egreso').reduce((s, c) => s + (c.budget ?? 0), 0)
-
   // Category spending
   const catSpending: Record<string, number> = {}
   selTx.filter(t => t.type === 'gasto').forEach(t => {
@@ -162,26 +156,6 @@ export default function FinancesPage() {
               <StatCard label="Ingresos" value={formatCurrency(selIncome)} trendUp={selIncome > 0} />
               <StatCard label="Gastos" value={formatCurrency(selExpense)} trendDown={selExpense > 0} />
             </div>
-
-            {/* Proyección */}
-            {isCurrentMonth && <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-              <SectionHeader title="Proyección del mes" />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>A este ritmo vas a gastar</div>
-                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-mono)', color: totalBudget > 0 && projectedExpense > totalBudget ? 'var(--red)' : 'var(--green)' }}>
-                    {formatCurrency(projectedExpense)}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>a fin de mes · día {daysPassed}/{daysInMonth}</div>
-                </div>
-                {totalBudget > 0 && (
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>vs presupuesto total {formatCurrency(totalBudget)}</div>
-                    <ProgressBar value={projectedExpense} total={totalBudget} height={10} color={projectedExpense > totalBudget ? 'var(--red)' : 'var(--green)'} />
-                  </div>
-                )}
-              </div>
-            </div>}
 
             {/* Gastos por categoría */}
             {categories.filter(c => c.type === 'egreso').length > 0 && (
@@ -302,6 +276,46 @@ export default function FinancesPage() {
                 </div>
               </div>
             )}
+
+            {/* Tendencia mensual */}
+            {(() => {
+              const months = Array.from({ length: 6 }, (_, i) => {
+                const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+                const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                const label = d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '')
+                const txs = transactions.filter(t => t.date?.startsWith(str))
+                return {
+                  label,
+                  income: txs.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0),
+                  expense: txs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0),
+                }
+              })
+              const maxVal = Math.max(...months.flatMap(m => [m.income, m.expense]), 1)
+              const CH = 90, BW = 16, IG = 4, GW = BW * 2 + IG, GG = 14, PAD = 2
+              return (
+                <div className="card" style={{ padding: 20, marginTop: 20 }}>
+                  <SectionHeader title="Tendencia mensual" />
+                  <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                    <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--green)', marginRight: 5 }} />Ingresos</span>
+                    <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--red)', marginRight: 5 }} />Gastos</span>
+                  </div>
+                  <svg viewBox={`0 0 300 125`} width="100%" style={{ display: 'block' }}>
+                    {months.map((m, i) => {
+                      const gx = PAD + i * (GW + GG)
+                      const ih = Math.max(2, (m.income / maxVal) * CH)
+                      const eh = Math.max(2, (m.expense / maxVal) * CH)
+                      return (
+                        <g key={i}>
+                          <rect x={gx} y={CH - ih} width={BW} height={ih} fill="var(--green)" rx={2} opacity={0.85} />
+                          <rect x={gx + BW + IG} y={CH - eh} width={BW} height={eh} fill="var(--red)" rx={2} opacity={0.85} />
+                          <text x={gx + GW / 2} y={CH + 16} textAnchor="middle" fontSize={10} fill="var(--text-tertiary)" style={{ textTransform: 'capitalize' }}>{m.label}</text>
+                        </g>
+                      )
+                    })}
+                  </svg>
+                </div>
+              )
+            })()}
           </div>
         )}
 
