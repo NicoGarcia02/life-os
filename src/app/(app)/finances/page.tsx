@@ -37,6 +37,8 @@ export default function FinancesPage() {
   const [saving, setSaving] = useState(false)
   const [txError, setTxError] = useState<string | null>(null)
   const [expandedCat, setExpandedCat] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [filterCat, setFilterCat] = useState('')
 
   const now = new Date()
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -113,6 +115,38 @@ export default function FinancesPage() {
   const selExpense = selTx.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0)
   const selBalance = selIncome - selExpense
 
+  // Previous month for insights
+  const prevMonthStr = (() => {
+    const [y, m] = selectedMonth.split('-').map(Number)
+    const d = new Date(y, m - 2, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })()
+  const prevTx = transactions.filter(t => t.date?.startsWith(prevMonthStr))
+  const prevExpense = prevTx.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0)
+  const prevIncome = prevTx.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0)
+
+  // Annual balance
+  const yearStr = String(now.getFullYear())
+  const yearTx = transactions.filter(t => t.date?.startsWith(yearStr))
+  const yearBalance = yearTx.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0)
+                   - yearTx.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0)
+
+  function exportCSV() {
+    const rows = [['Fecha', 'Descripción', 'Categoría', 'Tipo', 'Monto']]
+    selTx.forEach(tx => rows.push([
+      tx.date, tx.description,
+      tx.finance_categories?.name ?? 'Sin categoría',
+      tx.type === 'ingreso' ? 'Ingreso' : 'Gasto',
+      tx.amount.toFixed(2),
+    ]))
+    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+      download: `finanzas-${selectedMonth}.csv`,
+    })
+    a.click()
+  }
+
   // Category spending
   const catSpending: Record<string, number> = {}
   selTx.filter(t => t.type === 'gasto').forEach(t => {
@@ -151,11 +185,46 @@ export default function FinancesPage() {
       <div style={{ marginTop: 16 }}>
         {tab === 'resumen' && (
           <div>
-            <div className="grid-3" style={{ gap: 12, marginBottom: 20 }}>
+            <div className="grid-3" style={{ gap: 12, marginBottom: 12 }}>
               <StatCard label="Balance del mes" value={formatCurrency(selBalance)} trendUp={selBalance > 0} trendDown={selBalance < 0} />
               <StatCard label="Ingresos" value={formatCurrency(selIncome)} trendUp={selIncome > 0} />
               <StatCard label="Gastos" value={formatCurrency(selExpense)} trendDown={selExpense > 0} />
             </div>
+
+            {/* Balance anual */}
+            <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
+              Saldo acumulado {yearStr}:
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, marginLeft: 6, color: yearBalance >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {yearBalance >= 0 ? '+' : ''}{formatCurrency(yearBalance)}
+              </span>
+            </div>
+
+            {/* Insights */}
+            {(() => {
+              const items: { icon: string; text: string }[] = []
+              if (prevExpense > 0 && selExpense > 0) {
+                const pct = Math.round(((selExpense - prevExpense) / prevExpense) * 100)
+                items.push({ icon: pct > 0 ? '📈' : '📉', text: pct > 0 ? `Gastaste ${pct}% más que el mes anterior` : pct < 0 ? `Gastaste ${Math.abs(pct)}% menos que el mes anterior` : 'Mismo nivel de gasto que el mes anterior' })
+              }
+              const topCatId = Object.entries(catSpending).sort((a, b) => b[1] - a[1])[0]?.[0]
+              const topCat = topCatId ? categories.find(c => c.id === topCatId) : null
+              if (topCat) items.push({ icon: topCat.icon, text: `Mayor gasto: ${topCat.name} (${formatCurrency(catSpending[topCatId])})` })
+              if (prevIncome > 0 && selIncome > 0) {
+                const pct = Math.round(((selIncome - prevIncome) / prevIncome) * 100)
+                if (pct !== 0) items.push({ icon: pct > 0 ? '💚' : '🔻', text: `Ingresos ${pct > 0 ? '+' : ''}${pct}% vs mes anterior` })
+              }
+              if (items.length === 0) return null
+              return (
+                <div className="card" style={{ padding: '14px 20px', marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {items.map((it, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                      <span style={{ fontSize: 16 }}>{it.icon}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{it.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
 
             {/* Gastos por categoría */}
             {categories.filter(c => c.type === 'egreso').length > 0 && (
@@ -321,11 +390,33 @@ export default function FinancesPage() {
 
         {tab === 'movimientos' && (
           <div>
-            {selTx.length === 0 ? (
-              <EmptyState icon="💰" title="Sin movimientos" description="No hay movimientos en este mes." action={{ label: '+ Agregar', onClick: openNewTx }} />
-            ) : (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar movimiento..."
+                style={{ flex: 1, minWidth: 160, padding: '8px 12px', fontSize: 13, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none' }}
+              />
+              <select
+                value={filterCat}
+                onChange={e => setFilterCat(e.target.value)}
+                style={{ padding: '8px 12px', fontSize: 13, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                <option value="">Todas las categorías</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+              </select>
+              {selTx.length > 0 && <Btn variant="ghost" size="sm" onClick={exportCSV}>↓ CSV</Btn>}
+            </div>
+            {(() => {
+              const displayTx = selTx.filter(tx =>
+                (!search || tx.description.toLowerCase().includes(search.toLowerCase())) &&
+                (!filterCat || tx.category_id === filterCat)
+              )
+              return displayTx.length === 0 ? (
+                <EmptyState icon="🔍" title="Sin resultados" description="No hay movimientos que coincidan." />
+              ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {selTx.map((tx, i) => {
+                {displayTx.map((tx, i) => {
                   const cat = tx.finance_categories
                   return (
                     <div key={tx.id} className={`card animate-fade stagger-${Math.min(i + 1, 7)}`}
@@ -356,7 +447,8 @@ export default function FinancesPage() {
                   )
                 })}
               </div>
-            )}
+              )
+            })()}
           </div>
         )}
 
