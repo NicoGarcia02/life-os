@@ -23,6 +23,7 @@ export default function FinancesPage() {
   const [catForm, setCatForm] = useState({ name: '', icon: '💰', type: 'egreso' as 'egreso' | 'ingreso', budget: '' })
   const [saving, setSaving] = useState(false)
   const [txError, setTxError] = useState<string | null>(null)
+  const [expandedCat, setExpandedCat] = useState<string | null>(null)
 
   function openNewTx() {
     setEditTx(null)
@@ -146,11 +147,17 @@ export default function FinancesPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {categories.filter(c => c.type === 'egreso').map(cat => {
                     const spent = catSpending[cat.id] ?? 0
+                    const isExpanded = expandedCat === cat.id
+                    const catTxs = monthTx.filter(t => t.type === 'gasto' && t.category_id === cat.id)
                     return (
                       <div key={cat.id}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div
+                          onClick={() => setExpandedCat(isExpanded ? null : cat.id)}
+                          style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}
+                        >
                           <span style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span>{cat.icon}</span>{cat.name}
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{isExpanded ? '▲' : '▼'}</span>
                           </span>
                           <div style={{ textAlign: 'right' }}>
                             <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{formatCurrency(spent)}</span>
@@ -158,6 +165,21 @@ export default function FinancesPage() {
                           </div>
                         </div>
                         {cat.budget && <ProgressBar value={spent} total={cat.budget} height={6} />}
+                        {isExpanded && (
+                          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {catTxs.length === 0 ? (
+                              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', paddingLeft: 8 }}>Sin movimientos este mes</div>
+                            ) : catTxs.map(tx => (
+                              <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)' }}>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 500 }}>{tx.description}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{formatDate(tx.date)}</div>
+                                </div>
+                                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>-{formatCurrency(tx.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -172,14 +194,35 @@ export default function FinancesPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {categories.filter(c => c.type === 'ingreso').map(cat => {
                     const received = catIncome[cat.id] ?? 0
+                    const isExpanded = expandedCat === cat.id
+                    const catTxs = monthTx.filter(t => t.type === 'ingreso' && t.category_id === cat.id)
                     return (
                       <div key={cat.id}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div
+                          onClick={() => setExpandedCat(isExpanded ? null : cat.id)}
+                          style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}
+                        >
                           <span style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span>{cat.icon}</span>{cat.name}
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{isExpanded ? '▲' : '▼'}</span>
                           </span>
                           <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--green)' }}>+{formatCurrency(received)}</span>
                         </div>
+                        {isExpanded && (
+                          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {catTxs.length === 0 ? (
+                              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', paddingLeft: 8 }}>Sin movimientos este mes</div>
+                            ) : catTxs.map(tx => (
+                              <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)' }}>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 500 }}>{tx.description}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{formatDate(tx.date)}</div>
+                                </div>
+                                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--green)' }}>+{formatCurrency(tx.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
