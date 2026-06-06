@@ -51,6 +51,7 @@ export interface FinanceCategory {
   user_id: string
   name: string
   icon: string
+  type: 'ingreso' | 'egreso'
   budget: number | null
   color: string | null
   created_at: string

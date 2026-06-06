@@ -20,7 +20,7 @@ export default function FinancesPage() {
   const [editCat, setEditCat] = useState<FinanceCategory | null>(null)
   const [editTx, setEditTx] = useState<Transaction | null>(null)
   const [txForm, setTxForm] = useState({ description: '', amount: '', type: 'gasto' as 'gasto' | 'ingreso', category_id: '', date: today() })
-  const [catForm, setCatForm] = useState({ name: '', icon: '💰', budget: '' })
+  const [catForm, setCatForm] = useState({ name: '', icon: '💰', type: 'egreso' as 'egreso' | 'ingreso', budget: '' })
   const [saving, setSaving] = useState(false)
   const [txError, setTxError] = useState<string | null>(null)
 
@@ -38,13 +38,13 @@ export default function FinancesPage() {
 
   function openNewCat() {
     setEditCat(null)
-    setCatForm({ name: '', icon: '💰', budget: '' })
+    setCatForm({ name: '', icon: '💰', type: 'egreso', budget: '' })
     setCatModal(true)
   }
 
   function openEditCat(cat: FinanceCategory) {
     setEditCat(cat)
-    setCatForm({ name: cat.name, icon: cat.icon, budget: cat.budget?.toString() ?? '' })
+    setCatForm({ name: cat.name, icon: cat.icon, type: cat.type, budget: cat.budget?.toString() ?? '' })
     setCatModal(true)
   }
 
@@ -66,9 +66,9 @@ export default function FinancesPage() {
     setSaving(true)
     const budget = catForm.budget ? parseFloat(catForm.budget) : null
     if (editCat) {
-      await updateCategory(editCat.id, { name: catForm.name, icon: catForm.icon, budget })
+      await updateCategory(editCat.id, { name: catForm.name, icon: catForm.icon, type: catForm.type, budget })
     } else {
-      await addCategory({ name: catForm.name, icon: catForm.icon, budget })
+      await addCategory({ name: catForm.name, icon: catForm.icon, type: catForm.type, budget })
     }
     setCatModal(false)
     setSaving(false)
@@ -85,6 +85,11 @@ export default function FinancesPage() {
   const catSpending: Record<string, number> = {}
   monthTx.filter(t => t.type === 'gasto').forEach(t => {
     if (t.category_id) catSpending[t.category_id] = (catSpending[t.category_id] ?? 0) + t.amount
+  })
+
+  const catIncome: Record<string, number> = {}
+  monthTx.filter(t => t.type === 'ingreso').forEach(t => {
+    if (t.category_id) catIncome[t.category_id] = (catIncome[t.category_id] ?? 0) + t.amount
   })
 
   if (loading) return <div style={{ color: 'var(--text-tertiary)', padding: 40 }}>Cargando...</div>
@@ -134,12 +139,12 @@ export default function FinancesPage() {
               </div>
             </div>
 
-            {/* Por categoría */}
-            {categories.length > 0 && (
-              <div className="card" style={{ padding: 20 }}>
+            {/* Gastos por categoría */}
+            {categories.filter(c => c.type === 'egreso').length > 0 && (
+              <div className="card" style={{ padding: 20, marginBottom: 20 }}>
                 <SectionHeader title="Gastos por categoría" />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  {categories.map(cat => {
+                  {categories.filter(c => c.type === 'egreso').map(cat => {
                     const spent = catSpending[cat.id] ?? 0
                     return (
                       <div key={cat.id}>
@@ -153,6 +158,28 @@ export default function FinancesPage() {
                           </div>
                         </div>
                         {cat.budget && <ProgressBar value={spent} total={cat.budget} height={6} />}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Ingresos por categoría */}
+            {categories.filter(c => c.type === 'ingreso').length > 0 && (
+              <div className="card" style={{ padding: 20 }}>
+                <SectionHeader title="Ingresos por categoría" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {categories.filter(c => c.type === 'ingreso').map(cat => {
+                    const received = catIncome[cat.id] ?? 0
+                    return (
+                      <div key={cat.id}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span>{cat.icon}</span>{cat.name}
+                          </span>
+                          <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--green)' }}>+{formatCurrency(received)}</span>
+                        </div>
                       </div>
                     )
                   })}
@@ -255,18 +282,21 @@ export default function FinancesPage() {
           <Input label="Descripción" value={txForm.description} onChange={e => setTxForm(p => ({ ...p, description: e.target.value }))} required placeholder="Ej: Almuerzo" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Input label="Monto" type="number" value={txForm.amount} onChange={e => setTxForm(p => ({ ...p, amount: e.target.value }))} required min="0" step="0.01" />
-            <SelectInput label="Tipo" value={txForm.type} onChange={e => setTxForm(p => ({ ...p, type: e.target.value as 'gasto' | 'ingreso' }))}>
+            <SelectInput label="Tipo" value={txForm.type} onChange={e => setTxForm(p => ({ ...p, type: e.target.value as 'gasto' | 'ingreso', category_id: '' }))}>
               <option value="gasto">Gasto</option>
               <option value="ingreso">Ingreso</option>
             </SelectInput>
           </div>
           <Input label="Fecha" type="date" value={txForm.date} onChange={e => setTxForm(p => ({ ...p, date: e.target.value }))} />
-          {categories.length > 0 && (
-            <SelectInput label="Categoría" value={txForm.category_id} onChange={e => setTxForm(p => ({ ...p, category_id: e.target.value }))}>
-              <option value="">Sin categoría</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-            </SelectInput>
-          )}
+          {(() => {
+            const filtered = categories.filter(c => txForm.type === 'ingreso' ? c.type === 'ingreso' : c.type === 'egreso')
+            return filtered.length > 0 && (
+              <SelectInput label="Categoría" value={txForm.category_id} onChange={e => setTxForm(p => ({ ...p, category_id: e.target.value }))}>
+                <option value="">Sin categoría</option>
+                {filtered.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+              </SelectInput>
+            )
+          })()}
           {txError && (
             <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--red)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 13, color: 'var(--red)' }}>
               {txError}
@@ -304,6 +334,10 @@ export default function FinancesPage() {
               ))}
             </div>
           </div>
+          <SelectInput label="Tipo de categoría" value={catForm.type} onChange={e => setCatForm(p => ({ ...p, type: e.target.value as 'egreso' | 'ingreso' }))}>
+            <option value="egreso">Gasto</option>
+            <option value="ingreso">Ingreso</option>
+          </SelectInput>
           <Input label="Presupuesto mensual" type="number" value={catForm.budget} onChange={e => setCatForm(p => ({ ...p, budget: e.target.value }))} min="0" step="0.01" placeholder="Opcional" />
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
             <Btn variant="ghost" type="button" onClick={() => setCatModal(false)}>Cancelar</Btn>

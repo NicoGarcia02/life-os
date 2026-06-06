@@ -36,7 +36,7 @@ export function useFinances() {
     await fetchAll()
   }, [fetchAll])
 
-  const addCategory = useCallback(async (cat: Pick<FinanceCategory, 'name' | 'icon' | 'budget'>) => {
+  const addCategory = useCallback(async (cat: Pick<FinanceCategory, 'name' | 'icon' | 'type' | 'budget'>) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await supabase.from('finance_categories').insert({ ...cat, user_id: user.id })
