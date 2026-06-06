@@ -1,5 +1,18 @@
 'use client'
 import { useState } from 'react'
+
+const CHART_COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16']
+
+function pt(cx: number, cy: number, r: number, deg: number) {
+  const rad = deg * Math.PI / 180
+  return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) }
+}
+function slicePath(cx: number, cy: number, R: number, r: number, a1: number, a2: number) {
+  const p1 = pt(cx, cy, R, a1), p2 = pt(cx, cy, R, a2)
+  const p3 = pt(cx, cy, r, a2), p4 = pt(cx, cy, r, a1)
+  const large = a2 - a1 > 180 ? 1 : 0
+  return `M${p1.x} ${p1.y} A${R} ${R} 0 ${large} 1 ${p2.x} ${p2.y} L${p3.x} ${p3.y} A${r} ${r} 0 ${large} 0 ${p4.x} ${p4.y}Z`
+}
 import TabBar from '@/components/ui/TabBar'
 import StatCard from '@/components/ui/StatCard'
 import ProgressBar from '@/components/ui/ProgressBar'
@@ -174,11 +187,41 @@ export default function FinancesPage() {
             {categories.filter(c => c.type === 'egreso').length > 0 && (
               <div className="card" style={{ padding: 20, marginBottom: 20 }}>
                 <SectionHeader title="Gastos por categoría" />
+                {(() => {
+                  const data = categories
+                    .filter(c => c.type === 'egreso' && (catSpending[c.id] ?? 0) > 0)
+                    .map((c, i) => ({ cat: c, value: catSpending[c.id] ?? 0, color: CHART_COLORS[i % CHART_COLORS.length] }))
+                  const total = data.reduce((s, d) => s + d.value, 0)
+                  if (data.length === 0) return null
+                  let angle = 0
+                  const slices = data.map(d => {
+                    const span = d.value / total * (data.length === 1 ? 359.99 : 360)
+                    const s = { ...d, a1: angle, a2: angle + span }
+                    angle += span
+                    return s
+                  })
+                  return (
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+                      <svg width={150} height={150} viewBox="0 0 160 160" style={{ flexShrink: 0 }}>
+                        {slices.map((s, i) => <path key={i} d={slicePath(80, 80, 72, 46, s.a1, s.a2)} fill={s.color} />)}
+                      </svg>
+                      <div style={{ flex: 1, minWidth: 140, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {slices.map((s, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                            <span style={{ fontSize: 13, flex: 1 }}>{s.cat.icon} {s.cat.name}</span>
+                            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{Math.round(s.value / total * 100)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {categories.filter(c => c.type === 'egreso').map(cat => {
                     const spent = catSpending[cat.id] ?? 0
                     const isExpanded = expandedCat === cat.id
-                    const catTxs = monthTx.filter(t => t.type === 'gasto' && t.category_id === cat.id)
+                    const catTxs = selTx.filter(t => t.type === 'gasto' && t.category_id === cat.id)
                     return (
                       <div key={cat.id}>
                         <div
