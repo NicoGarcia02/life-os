@@ -25,6 +25,23 @@ export default function FinancesPage() {
   const [txError, setTxError] = useState<string | null>(null)
   const [expandedCat, setExpandedCat] = useState<string | null>(null)
 
+  const now = new Date()
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr)
+
+  function prevMonth() {
+    const [y, m] = selectedMonth.split('-').map(Number)
+    const d = new Date(y, m - 2, 1)
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    setExpandedCat(null)
+  }
+  function nextMonth() {
+    const [y, m] = selectedMonth.split('-').map(Number)
+    const d = new Date(y, m, 1)
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    setExpandedCat(null)
+  }
+
   function openNewTx() {
     setEditTx(null)
     setTxForm({ description: '', amount: '', type: 'gasto', category_id: '', date: today() })
@@ -75,21 +92,28 @@ export default function FinancesPage() {
     setSaving(false)
   }
 
-  // Projection
-  const now = new Date()
+  // Filtered by selected month
+  const isCurrentMonth = selectedMonth === currentMonthStr
+  const monthLabel = new Date(selectedMonth + '-15').toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+  const selTx = transactions.filter(t => t.date?.startsWith(selectedMonth))
+  const selIncome = selTx.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0)
+  const selExpense = selTx.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0)
+  const selBalance = selIncome - selExpense
+
+  // Projection (current month only)
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   const daysPassed = now.getDate()
-  const projectedExpense = daysPassed > 0 ? (monthExpense / daysPassed) * daysInMonth : 0
-  const totalBudget = categories.reduce((s, c) => s + (c.budget ?? 0), 0)
+  const projectedExpense = daysPassed > 0 ? (selExpense / daysPassed) * daysInMonth : 0
+  const totalBudget = categories.filter(c => c.type === 'egreso').reduce((s, c) => s + (c.budget ?? 0), 0)
 
   // Category spending
   const catSpending: Record<string, number> = {}
-  monthTx.filter(t => t.type === 'gasto').forEach(t => {
+  selTx.filter(t => t.type === 'gasto').forEach(t => {
     if (t.category_id) catSpending[t.category_id] = (catSpending[t.category_id] ?? 0) + t.amount
   })
 
   const catIncome: Record<string, number> = {}
-  monthTx.filter(t => t.type === 'ingreso').forEach(t => {
+  selTx.filter(t => t.type === 'ingreso').forEach(t => {
     if (t.category_id) catIncome[t.category_id] = (catIncome[t.category_id] ?? 0) + t.amount
   })
 
@@ -111,17 +135,23 @@ export default function FinancesPage() {
         onChange={setTab}
       />
 
-      <div style={{ marginTop: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 20, marginBottom: 4 }}>
+        <Btn variant="ghost" size="sm" onClick={prevMonth}>‹</Btn>
+        <span style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize', minWidth: 160, textAlign: 'center' }}>{monthLabel}</span>
+        <Btn variant="ghost" size="sm" onClick={nextMonth} style={{ opacity: isCurrentMonth ? 0.3 : 1, pointerEvents: isCurrentMonth ? 'none' : 'auto' }}>›</Btn>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
         {tab === 'resumen' && (
           <div>
             <div className="grid-3" style={{ gap: 12, marginBottom: 20 }}>
-              <StatCard label="Balance del mes" value={formatCurrency(monthBalance)} trendUp={monthBalance > 0} trendDown={monthBalance < 0} />
-              <StatCard label="Ingresos" value={formatCurrency(monthIncome)} trendUp={monthIncome > 0} />
-              <StatCard label="Gastos" value={formatCurrency(monthExpense)} trendDown={monthExpense > 0} />
+              <StatCard label="Balance del mes" value={formatCurrency(selBalance)} trendUp={selBalance > 0} trendDown={selBalance < 0} />
+              <StatCard label="Ingresos" value={formatCurrency(selIncome)} trendUp={selIncome > 0} />
+              <StatCard label="Gastos" value={formatCurrency(selExpense)} trendDown={selExpense > 0} />
             </div>
 
             {/* Proyección */}
-            <div className="card" style={{ padding: 20, marginBottom: 20 }}>
+            {isCurrentMonth && <div className="card" style={{ padding: 20, marginBottom: 20 }}>
               <SectionHeader title="Proyección del mes" />
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <div>
@@ -138,7 +168,7 @@ export default function FinancesPage() {
                   </div>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* Gastos por categoría */}
             {categories.filter(c => c.type === 'egreso').length > 0 && (
@@ -234,11 +264,11 @@ export default function FinancesPage() {
 
         {tab === 'movimientos' && (
           <div>
-            {transactions.length === 0 ? (
-              <EmptyState icon="💰" title="Sin movimientos" description="Registrá tu primer ingreso o gasto." action={{ label: '+ Agregar', onClick: openNewTx }} />
+            {selTx.length === 0 ? (
+              <EmptyState icon="💰" title="Sin movimientos" description="No hay movimientos en este mes." action={{ label: '+ Agregar', onClick: openNewTx }} />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {transactions.map((tx, i) => {
+                {selTx.map((tx, i) => {
                   const cat = tx.finance_categories
                   return (
                     <div key={tx.id} className={`card animate-fade stagger-${Math.min(i + 1, 7)}`}
