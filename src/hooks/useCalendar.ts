@@ -14,15 +14,28 @@ export function useCalendar() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     lastRangeRef.current = { start: startDate, end: endDate }
-    const { data } = await supabase
+
+    // Non-recurring events in range
+    const { data: nonRecurring } = await supabase
       .from('events')
       .select('*')
       .eq('user_id', user.id)
+      .eq('recurring', false)
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date')
       .order('time', { nullsFirst: true })
-    setEvents(data ?? [])
+
+    // All recurring events (started on or before end of range)
+    const { data: recurring } = await supabase
+      .from('events')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('recurring', true)
+      .lte('date', endDate)
+      .order('date')
+
+    setEvents([...(nonRecurring ?? []), ...(recurring ?? [])])
     setLoading(false)
   }, [])
 
@@ -42,10 +55,14 @@ export function useCalendar() {
   const updateEvent = useCallback(async (id: string, updates: Partial<Omit<CalendarEvent, 'id' | 'user_id' | 'created_at'>>): Promise<string | null> => {
     const { error } = await supabase.from('events').update(updates).eq('id', id)
     if (error) { console.error('[calendar] update error:', error.message); return error.message }
-    const { data } = await supabase.from('events').select('*').eq('id', id).single()
-    if (data) setEvents(prev => prev.map(e => e.id === id ? data : e))
+    if (lastRangeRef.current) {
+      await fetchEvents(lastRangeRef.current.start, lastRangeRef.current.end)
+    } else {
+      const { data } = await supabase.from('events').select('*').eq('id', id).single()
+      if (data) setEvents(prev => prev.map(e => e.id === id ? data : e))
+    }
     return null
-  }, [])
+  }, [fetchEvents])
 
   const deleteEvent = useCallback(async (id: string) => {
     await supabase.from('events').delete().eq('id', id)

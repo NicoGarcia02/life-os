@@ -43,6 +43,9 @@ export interface Task {
   due_date: string | null
   completed: boolean
   completed_at: string | null
+  recurring: boolean
+  recurrence_pattern: 'daily' | 'weekly' | 'monthly' | null
+  label: string | null
   created_at: string
 }
 
@@ -76,6 +79,7 @@ export interface Note {
   content: string | null
   category: string
   color: string | null
+  pinned: boolean
   created_at: string
   updated_at: string
 }
@@ -88,6 +92,10 @@ export interface CalendarEvent {
   time: string | null
   duration: number | null
   tag: 'Trabajo' | 'Personal' | 'Salud' | 'Social' | 'Educación'
+  description: string | null
+  recurring: boolean
+  recurrence_interval: number | null
+  recurrence_unit: 'day' | 'week' | 'month' | null
   created_at: string
 }
 
