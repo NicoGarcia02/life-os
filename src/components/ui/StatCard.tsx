@@ -1,4 +1,6 @@
 'use client'
+import { useEffect, useRef } from 'react'
+import { animate } from 'framer-motion'
 
 interface StatCardProps {
   label: string
@@ -9,6 +11,30 @@ interface StatCardProps {
   onClick?: () => void
   highlight?: 'red' | 'green' | 'yellow' | 'accent'
   className?: string
+}
+
+function CountUp({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const prev = useRef(0)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const from = prev.current
+    prev.current = value
+    const ctrl = animate(from, value, {
+      duration: 0.65,
+      ease: [0.25, 0.1, 0.25, 1],
+      onUpdate(v) {
+        el.textContent = Number.isInteger(value)
+          ? Math.round(v).toString()
+          : v.toFixed(1)
+      },
+    })
+    return ctrl.stop
+  }, [value])
+
+  return <span ref={ref}>{value}</span>
 }
 
 export default function StatCard({ label, value, trend, trendUp, trendDown, onClick, highlight, className = '' }: StatCardProps) {
@@ -41,7 +67,9 @@ export default function StatCard({ label, value, trend, trendUp, trendDown, onCl
         fontFamily: 'var(--font-mono)',
         color: 'var(--text-primary)',
         lineHeight: 1,
-      }}>{value}</div>
+      }}>
+        {typeof value === 'number' ? <CountUp value={value} /> : value}
+      </div>
       {trend && (
         <div style={{ fontSize: 12, color: trendColor, marginTop: 6, fontWeight: 500 }}>
           {trendUp ? '↑' : trendDown ? '↓' : ''} {trend}

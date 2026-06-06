@@ -1,9 +1,12 @@
 'use client'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
 import Sidebar from '@/components/Sidebar'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const pathname = usePathname()
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -37,13 +40,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="main-content" style={{
-        flex: 1,
-        overflowY: 'auto',
-        background: 'var(--bg-root)',
-      }}>
-        {children}
-      </main>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.main
+          key={pathname}
+          className="main-content"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            background: 'var(--bg-root)',
+          }}
+        >
+          {children}
+        </motion.main>
+      </AnimatePresence>
     </div>
   )
 }

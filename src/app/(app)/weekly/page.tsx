@@ -149,6 +149,33 @@ export default function WeeklyPage() {
   const bestDayIndex = dayScores.indexOf(bestDayScore)
   const bestDay = weekDays[bestDayIndex]
 
+  // Poor sleep habit completion (for comparison)
+  const poorSleepDays = weekDays.filter(day => {
+    const s = sleepEntries.find(e => e.date === day)
+    return s && entryHours(s) < 7
+  })
+  const poorSleepHabitPct = poorSleepDays.length > 0
+    ? Math.round(poorSleepDays.reduce((s, day) => {
+        const n = entries.filter(e => e.date === day && e.completed).length
+        return s + (habits.length > 0 ? (n / habits.length) * 100 : 0)
+      }, 0) / poorSleepDays.length)
+    : null
+
+  // Score trend (Mon-Wed vs Thu-Sun)
+  const validScores = dayScores.filter(s => s > 0)
+  const firstHalf = dayScores.slice(0, 3).filter(s => s > 0)
+  const secondHalf = dayScores.slice(3).filter(s => s > 0)
+  const firstAvg = firstHalf.length ? firstHalf.reduce((a, b) => a + b) / firstHalf.length : 0
+  const secondAvg = secondHalf.length ? secondHalf.reduce((a, b) => a + b) / secondHalf.length : 0
+  const scoreTrend = firstHalf.length > 0 && secondHalf.length > 0 ? Math.round(secondAvg - firstAvg) : null
+
+  // Mood vs performance
+  const goodScoreDayRatings = weekDays
+    .map((d, i) => ({ score: dayScores[i], rating: closings.find(c => c.date === d)?.day_rating }))
+    .filter(x => x.score >= 70 && x.rating)
+    .map(x => x.rating as number)
+  const avgMoodHighScore = goodScoreDayRatings.length ? +(goodScoreDayRatings.reduce((a, b) => a + b) / goodScoreDayRatings.length).toFixed(1) : null
+
   if (loading) return <div style={{ color: 'var(--text-tertiary)', padding: 40 }}>Cargando...</div>
 
   return (
@@ -290,20 +317,38 @@ export default function WeeklyPage() {
       )}
 
       {/* Patrones */}
-      {(goodSleepHabitPct !== null || bestDay) && (
+      {(goodSleepHabitPct !== null || bestDay || scoreTrend !== null || validScores.length > 0) && (
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="Patrones detectados" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {goodSleepHabitPct !== null && goodSleepDays.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {goodSleepHabitPct !== null && poorSleepHabitPct !== null && goodSleepDays.length > 0 && poorSleepDays.length > 0 && (
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
+                <span>😴</span>
+                <span>Con +7h de sueño completaste <strong style={{ color: 'var(--green)' }}>{goodSleepHabitPct}%</strong> de hábitos; con menos, solo <strong style={{ color: goodSleepHabitPct > poorSleepHabitPct ? 'var(--red)' : 'var(--green)' }}>{poorSleepHabitPct}%</strong></span>
+              </div>
+            )}
+            {goodSleepHabitPct !== null && (poorSleepHabitPct === null) && goodSleepDays.length > 0 && (
               <div style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
                 <span>💡</span>
-                <span>Los días que dormiste +7h completaste un <strong style={{ color: 'var(--green)' }}>{goodSleepHabitPct}%</strong> de tus hábitos</span>
+                <span>Los días que dormiste +7h completaste <strong style={{ color: 'var(--green)' }}>{goodSleepHabitPct}%</strong> de tus hábitos</span>
+              </div>
+            )}
+            {scoreTrend !== null && (
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
+                <span>{scoreTrend > 5 ? '📈' : scoreTrend < -5 ? '📉' : '➡️'}</span>
+                <span>Tu score {scoreTrend > 5 ? <><strong style={{ color: 'var(--green)' }}>mejoró +{scoreTrend}pts</strong> hacia el final de la semana</> : scoreTrend < -5 ? <><strong style={{ color: 'var(--red)' }}>bajó {scoreTrend}pts</strong> hacia el final de la semana</> : <>fue <strong>estable</strong> durante toda la semana</>}</span>
               </div>
             )}
             {bestDay && bestDayScore > 0 && (
               <div style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
                 <span>🏆</span>
-                <span>Tu mejor día fue el <strong style={{ color: 'var(--accent)' }}>{formatDate(bestDay, { weekday: 'long' })}</strong> con score <strong style={{ color: scoreColor(bestDayScore), fontFamily: 'var(--font-mono)' }}>{bestDayScore}</strong></span>
+                <span>Mejor día: <strong style={{ color: 'var(--accent)' }}>{formatDate(bestDay, { weekday: 'long' })}</strong> con score <strong style={{ color: scoreColor(bestDayScore), fontFamily: 'var(--font-mono)' }}>{bestDayScore}</strong></span>
+              </div>
+            )}
+            {avgMoodHighScore !== null && (
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', display: 'flex', gap: 8 }}>
+                <span>🙂</span>
+                <span>En tus días de alto rendimiento (score +70) tu estado de ánimo promedio fue <strong style={{ color: 'var(--accent)' }}>{avgMoodHighScore}/5</strong></span>
               </div>
             )}
             {habitsMet === habits.length && habits.length > 0 && (

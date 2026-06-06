@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase'
 import TabBar from '@/components/ui/TabBar'
 import ProgressBar from '@/components/ui/ProgressBar'
@@ -40,9 +41,10 @@ export default function HabitsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const rangeEnd = today()
+    const streakStart = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().split('T')[0] })()
     const [habitsRes, entriesRes] = await Promise.all([
       supabase.from('habits').select('*').eq('user_id', user.id).eq('active', true).order('created_at'),
-      supabase.from('habit_entries').select('*').eq('user_id', user.id).gte('date', monthStart).lte('date', rangeEnd),
+      supabase.from('habit_entries').select('*').eq('user_id', user.id).gte('date', streakStart).lte('date', rangeEnd),
     ])
     if (habitsRes.data !== null) setHabits(habitsRes.data)
     if (entriesRes.data !== null) setEntries(entriesRes.data)
@@ -129,6 +131,19 @@ export default function HabitsPage() {
     await fetchAll()
   }
 
+  function getDailyStreak(habitId: string): number {
+    let streak = 0
+    const d = new Date(today())
+    while (true) {
+      const dateStr = d.toISOString().split('T')[0]
+      if (entries.some(e => e.habit_id === habitId && e.date === dateStr && e.completed)) {
+        streak++
+        d.setDate(d.getDate() - 1)
+      } else break
+    }
+    return streak
+  }
+
   // Day tab helpers
   const activeHabitIds = new Set(habits.map(h => h.id))
   const dayEntries = entries.filter(e => e.date === selectedDate && e.completed && activeHabitIds.has(e.habit_id))
@@ -203,23 +218,31 @@ export default function HabitsPage() {
                   const weekCount = getWeeklyCount(habit.id)
                   const streak = getWeeklyStreak(habit)
                   return (
-                    <div key={habit.id}
+                    <motion.div key={habit.id}
                       className={`card animate-fade stagger-${Math.min(i + 1, 7)}`}
                       style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}
                       onClick={() => toggleEntry(habit.id, selectedDate)}
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     >
-                      <div className={`habit-check ${done ? 'checked' : ''}`}>
+                      <motion.div
+                        className={`habit-check ${done ? 'checked' : ''}`}
+                        whileTap={{ scale: 0.7 }}
+                        animate={done ? { scale: [1, 1.35, 0.9, 1] } : { scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+                      >
                         {done && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
-                      </div>
+                      </motion.div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 16 }}>{habit.emoji}</span>
                           <span style={{ fontSize: 15, fontWeight: 500, textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>{habit.name}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 3, display: 'flex', gap: 12 }}>
-                          <span>Meta: {habit.weekly_goal}/sem</span>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 3, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                           <span style={{ color: weekCount >= habit.weekly_goal ? 'var(--green)' : 'var(--text-secondary)' }}>Esta semana: {weekCount}/{habit.weekly_goal}</span>
-                          {streak > 0 && <span>🔥 {streak} semana{streak > 1 ? 's' : ''}</span>}
+                          {(() => { const daily = getDailyStreak(habit.id); return daily > 0 && <span style={{ color: daily >= 7 ? 'var(--yellow, #f59e0b)' : 'var(--text-secondary)', fontWeight: daily >= 3 ? 600 : 400 }}>🔥 {daily} día{daily !== 1 ? 's' : ''} seguido{daily !== 1 ? 's' : ''}</span> })()}
+                          {streak > 1 && <span style={{ color: 'var(--text-tertiary)' }}>· {streak} sem. de meta</span>}
                         </div>
                       </div>
                       <button
@@ -232,7 +255,7 @@ export default function HabitsPage() {
                         title="Eliminar hábito"
                         style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '4px 8px', borderRadius: 6 }}
                       >✕</button>
-                    </div>
+                    </motion.div>
                   )
                 })}
               </div>
