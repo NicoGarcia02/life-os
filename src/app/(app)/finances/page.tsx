@@ -39,6 +39,7 @@ export default function FinancesPage() {
   const [expandedCat, setExpandedCat] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
+  const [barTooltip, setBarTooltip] = useState<{ i: number; type: 'income' | 'expense' } | null>(null)
 
   const now = new Date()
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -368,16 +369,54 @@ export default function FinancesPage() {
                     <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--green)', marginRight: 5 }} />Ingresos</span>
                     <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--red)', marginRight: 5 }} />Gastos</span>
                   </div>
-                  <svg viewBox={`0 0 300 125`} width="100%" style={{ display: 'block' }}>
+                  <svg viewBox={`0 0 300 125`} width="100%" style={{ display: 'block' }} onMouseLeave={() => setBarTooltip(null)}>
                     {months.map((m, i) => {
                       const gx = PAD + i * (GW + GG)
                       const ih = Math.max(2, (m.income / maxVal) * CH)
                       const eh = Math.max(2, (m.expense / maxVal) * CH)
+                      const iHovered = barTooltip?.i === i && barTooltip.type === 'income'
+                      const eHovered = barTooltip?.i === i && barTooltip.type === 'expense'
+
+                      // Tooltip for income bar
+                      const iTipX = Math.min(gx + BW / 2, 260)
+                      const iTipY = CH - ih - 22
+                      // Tooltip for expense bar
+                      const eTipX = Math.min(gx + BW + IG + BW / 2, 260)
+                      const eTipY = CH - eh - 22
+
+                      const fmt = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${Math.round(v)}`
+
                       return (
                         <g key={i}>
-                          <rect x={gx} y={CH - ih} width={BW} height={ih} fill="var(--green)" rx={2} opacity={0.85} />
-                          <rect x={gx + BW + IG} y={CH - eh} width={BW} height={eh} fill="var(--red)" rx={2} opacity={0.85} />
+                          <rect
+                            x={gx} y={CH - ih} width={BW} height={ih}
+                            fill="var(--green)" rx={2} opacity={iHovered ? 1 : 0.85}
+                            style={{ cursor: 'pointer' }}
+                            onMouseEnter={() => setBarTooltip({ i, type: 'income' })}
+                          />
+                          <rect
+                            x={gx + BW + IG} y={CH - eh} width={BW} height={eh}
+                            fill="var(--red)" rx={2} opacity={eHovered ? 1 : 0.85}
+                            style={{ cursor: 'pointer' }}
+                            onMouseEnter={() => setBarTooltip({ i, type: 'expense' })}
+                          />
                           <text x={gx + GW / 2} y={CH + 16} textAnchor="middle" fontSize={10} fill="var(--text-tertiary)" style={{ textTransform: 'capitalize' }}>{m.label}</text>
+
+                          {/* Income tooltip */}
+                          {iHovered && m.income > 0 && (
+                            <g>
+                              <rect x={iTipX - 22} y={iTipY - 11} width={44} height={16} rx={4} fill="#1a2a1a" />
+                              <text x={iTipX} y={iTipY + 1} textAnchor="middle" fontSize={9} fontWeight="600" fill="#4ade80">{fmt(m.income)}</text>
+                            </g>
+                          )}
+
+                          {/* Expense tooltip */}
+                          {eHovered && m.expense > 0 && (
+                            <g>
+                              <rect x={eTipX - 22} y={eTipY - 11} width={44} height={16} rx={4} fill="#2a1a1a" />
+                              <text x={eTipX} y={eTipY + 1} textAnchor="middle" fontSize={9} fontWeight="600" fill="#f87171">{fmt(m.expense)}</text>
+                            </g>
+                          )}
                         </g>
                       )
                     })}
