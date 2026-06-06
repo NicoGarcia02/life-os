@@ -39,7 +39,7 @@ export default function FinancesPage() {
   const [expandedCat, setExpandedCat] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
-  const [barTooltip, setBarTooltip] = useState<{ i: number; type: 'income' | 'expense' } | null>(null)
+  const [barTooltip, setBarTooltip] = useState<{ x: number; y: number; value: number; isIncome: boolean } | null>(null)
 
   const now = new Date()
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -374,52 +374,42 @@ export default function FinancesPage() {
                       const gx = PAD + i * (GW + GG)
                       const ih = Math.max(2, (m.income / maxVal) * CH)
                       const eh = Math.max(2, (m.expense / maxVal) * CH)
-                      const iHovered = barTooltip?.i === i && barTooltip.type === 'income'
-                      const eHovered = barTooltip?.i === i && barTooltip.type === 'expense'
-
-                      // Tooltip for income bar
-                      const iTipX = Math.min(gx + BW / 2, 260)
-                      const iTipY = CH - ih - 22
-                      // Tooltip for expense bar
-                      const eTipX = Math.min(gx + BW + IG + BW / 2, 260)
-                      const eTipY = CH - eh - 22
-
-                      const fmt = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${Math.round(v)}`
-
+                      const iCx = gx + BW / 2
+                      const eCx = gx + BW + IG + BW / 2
+                      const activeIncome = barTooltip?.isIncome && Math.abs((barTooltip?.x ?? -1) - iCx) < 1
+                      const activeExpense = barTooltip && !barTooltip.isIncome && Math.abs((barTooltip?.x ?? -1) - eCx) < 1
                       return (
                         <g key={i}>
                           <rect
                             x={gx} y={CH - ih} width={BW} height={ih}
-                            fill="var(--green)" rx={2} opacity={iHovered ? 1 : 0.85}
+                            fill="var(--green)" rx={2} opacity={activeIncome ? 1 : 0.85}
                             style={{ cursor: 'pointer' }}
-                            onMouseEnter={() => setBarTooltip({ i, type: 'income' })}
+                            onMouseEnter={() => setBarTooltip({ x: iCx, y: Math.max(CH - ih - 8, 8), value: m.income, isIncome: true })}
                           />
                           <rect
                             x={gx + BW + IG} y={CH - eh} width={BW} height={eh}
-                            fill="var(--red)" rx={2} opacity={eHovered ? 1 : 0.85}
+                            fill="var(--red)" rx={2} opacity={activeExpense ? 1 : 0.85}
                             style={{ cursor: 'pointer' }}
-                            onMouseEnter={() => setBarTooltip({ i, type: 'expense' })}
+                            onMouseEnter={() => setBarTooltip({ x: eCx, y: Math.max(CH - eh - 8, 8), value: m.expense, isIncome: false })}
                           />
                           <text x={gx + GW / 2} y={CH + 16} textAnchor="middle" fontSize={10} fill="var(--text-tertiary)" style={{ textTransform: 'capitalize' }}>{m.label}</text>
-
-                          {/* Income tooltip */}
-                          {iHovered && m.income > 0 && (
-                            <g>
-                              <rect x={iTipX - 22} y={iTipY - 11} width={44} height={16} rx={4} fill="#1a2a1a" />
-                              <text x={iTipX} y={iTipY + 1} textAnchor="middle" fontSize={9} fontWeight="600" fill="#4ade80">{fmt(m.income)}</text>
-                            </g>
-                          )}
-
-                          {/* Expense tooltip */}
-                          {eHovered && m.expense > 0 && (
-                            <g>
-                              <rect x={eTipX - 22} y={eTipY - 11} width={44} height={16} rx={4} fill="#2a1a1a" />
-                              <text x={eTipX} y={eTipY + 1} textAnchor="middle" fontSize={9} fontWeight="600" fill="#f87171">{fmt(m.expense)}</text>
-                            </g>
-                          )}
                         </g>
                       )
                     })}
+                    {/* Tooltip rendered last so it's always on top */}
+                    {barTooltip && (() => {
+                      const fmt = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${Math.round(v)}`
+                      const tw = 46
+                      const tx = Math.min(Math.max(barTooltip.x, tw / 2 + 2), 298 - tw / 2)
+                      return (
+                        <g style={{ pointerEvents: 'none' }}>
+                          <rect x={tx - tw / 2} y={barTooltip.y - 13} width={tw} height={15} rx={4} fill={barTooltip.isIncome ? '#1a2a1a' : '#2a1a1a'} />
+                          <text x={tx} y={barTooltip.y - 2} textAnchor="middle" fontSize={9} fontWeight="600" fill={barTooltip.isIncome ? '#4ade80' : '#f87171'}>
+                            {fmt(barTooltip.value)}
+                          </text>
+                        </g>
+                      )
+                    })()}
                   </svg>
                 </div>
               )
