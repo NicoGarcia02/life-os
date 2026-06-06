@@ -222,15 +222,15 @@ export default function HabitsPage() {
                       className={`card animate-fade stagger-${Math.min(i + 1, 7)}`}
                       style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}
                       onClick={() => toggleEntry(habit.id, selectedDate)}
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.98 }}
+                      whileHover={{ y: -4, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}
+                      whileTap={{ scale: 0.97 }}
                       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     >
                       <motion.div
                         className={`habit-check ${done ? 'checked' : ''}`}
-                        whileTap={{ scale: 0.7 }}
-                        animate={done ? { scale: [1, 1.35, 0.9, 1] } : { scale: 1 }}
-                        transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+                        whileTap={{ scale: 0.6 }}
+                        animate={done ? { scale: [1, 1.55, 0.85, 1.05, 1] } : { scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 15 }}
                       >
                         {done && <span style={{ color: '#fff', fontSize: 12 }}>✓</span>}
                       </motion.div>

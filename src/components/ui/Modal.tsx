@@ -51,10 +51,10 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
         >
           <motion.div
             key="modal-panel"
-            initial={{ opacity: 0, scale: 0.94, y: 16 }}
+            initial={{ opacity: 0, scale: 0.82, y: 32 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.94, y: 16 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+            exit={{ opacity: 0, scale: 0.88, y: 24 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 24 }}
             style={{
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-default)',
