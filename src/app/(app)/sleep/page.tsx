@@ -182,6 +182,28 @@ export default function SleepPage() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   })()
 
+  const last28 = entries.slice(0, 28)
+  const isWeekday = (d: string) => { const day = new Date(d + 'T12:00:00').getDay(); return day >= 1 && day <= 5 }
+  const wdEntries = last28.filter(e => isWeekday(e.date))
+  const weEntries = last28.filter(e => !isWeekday(e.date))
+
+  const avgTimeCalc = (list: typeof entries, field: 'sleep_time' | 'wake_time', night: boolean): string | null => {
+    const valid = list.filter(e => e[field])
+    if (!valid.length) return null
+    const total = valid.reduce((s, e) => {
+      const [h, m] = (e[field] as string).split(':').map(Number)
+      return s + ((night && h < 12 ? h + 24 : h) * 60 + m)
+    }, 0) / valid.length
+    const h = Math.floor(total / 60) % 24
+    const mm = Math.round(total % 60)
+    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+  }
+
+  const avgBedWeekday  = avgTimeCalc(wdEntries, 'sleep_time', true)
+  const avgWakeWeekday = avgTimeCalc(wdEntries, 'wake_time', false)
+  const avgBedWeekend  = avgTimeCalc(weEntries, 'sleep_time', true)
+  const avgWakeWeekend = avgTimeCalc(weEntries, 'wake_time', false)
+
   // Semanal stats
   const { start: weekStart, end: weekEnd } = getWeekRange()
   const weekEntries = entries.filter(e => e.date >= weekStart && e.date <= weekEnd)
@@ -351,14 +373,28 @@ export default function SleepPage() {
 
         {tab === 'tendencias' && (
           <div>
-            <div className="grid-2" style={{ gap: 12, marginBottom: 24 }}>
-              <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Hora promedio de dormir</div>
-                <div style={{ fontSize: 40, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-accent)' }}>{avgBed ?? '—'}</div>
+            <div className="card" style={{ padding: '24px', marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+                <div />
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Dormir</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Despertar</div>
               </div>
-              <div className="card" style={{ padding: '24px', textAlign: 'center' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Hora promedio de despertar</div>
-                <div style={{ fontSize: 40, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>{avgWake ?? '—'}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>Lun – Vie</div>
+                <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-accent)', textAlign: 'center' }}>{avgBedWeekday ?? '—'}</div>
+                <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)', textAlign: 'center' }}>{avgWakeWeekday ?? '—'}</div>
+              </div>
+              <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 12px' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>Sáb – Dom</div>
+                <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-accent)', textAlign: 'center' }}>{avgBedWeekend ?? '—'}</div>
+                <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)', textAlign: 'center' }}>{avgWakeWeekend ?? '—'}</div>
+              </div>
+              <div style={{ height: 1, background: 'var(--border)', margin: '4px 0 12px' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'center' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>General</div>
+                <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-accent)', opacity: 0.55, textAlign: 'center' }}>{avgBed ?? '—'}</div>
+                <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)', opacity: 0.55, textAlign: 'center' }}>{avgWake ?? '—'}</div>
               </div>
             </div>
             <div className="card" style={{ padding: 20 }}>
