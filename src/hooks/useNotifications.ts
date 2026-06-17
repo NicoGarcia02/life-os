@@ -14,14 +14,42 @@ export function storeIntensity(v: NotifIntensity) {
   localStorage.setItem(INTENSITY_KEY, v)
 }
 
+function playAlarm(ctx: AudioContext) {
+  const beep = (t: number) => {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.value = 880
+    osc.type = 'sine'
+    gain.gain.setValueAtTime(0.4, t)
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25)
+    osc.start(t)
+    osc.stop(t + 0.25)
+  }
+  const now = ctx.currentTime
+  beep(now)
+  beep(now + 0.35)
+  beep(now + 0.7)
+}
+
 export function useNotifications() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const audioCtxRef = useRef<AudioContext | null>(null)
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {})
     }
-    return () => { timers.current.forEach(clearTimeout) }
+    const unlock = () => {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
+      audioCtxRef.current.resume()
+    }
+    document.addEventListener('click', unlock, { once: true })
+    return () => {
+      timers.current.forEach(clearTimeout)
+      document.removeEventListener('click', unlock)
+    }
   }, [])
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
@@ -63,6 +91,9 @@ export function useNotifications() {
           else new Notification(ev.title, opts)
         } catch {
           try { new Notification(ev.title, opts) } catch { /* unsupported */ }
+        }
+        if (intensity === 'urgent' && audioCtxRef.current) {
+          playAlarm(audioCtxRef.current)
         }
       }, delay)
 
