@@ -7,6 +7,7 @@ import Btn from '@/components/ui/Btn'
 import { Input, SelectInput } from '@/components/ui/Input'
 import EmptyState from '@/components/ui/EmptyState'
 import { useCalendar } from '@/hooks/useCalendar'
+import { useNotifications, getStoredIntensity, storeIntensity, type NotifIntensity } from '@/hooks/useNotifications'
 import { today, formatDate, TAG_COLORS } from '@/lib/utils'
 import type { CalendarEvent } from '@/lib/types'
 
@@ -67,16 +68,20 @@ type FormState = {
   recurring: boolean
   recurrence_interval: string
   recurrence_unit: 'day' | 'week' | 'month'
+  notify: boolean
+  notify_minutes_before: string
 }
 
 const EMPTY_FORM: FormState = {
   title: '', date: today(), time: '', duration: '60',
   tag: 'Personal', description: '',
   recurring: false, recurrence_interval: '1', recurrence_unit: 'week',
+  notify: false, notify_minutes_before: '15',
 }
 
 export default function CalendarPage() {
   const { events, loading, fetchEvents, addEvent, updateEvent, deleteEvent } = useCalendar()
+  const { schedule } = useNotifications()
   const [tab, setTab] = useState('mes')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [modalOpen, setModalOpen] = useState(false)
@@ -85,6 +90,9 @@ export default function CalendarPage() {
   const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null)
   const [saving, setSaving] = useState(false)
   const [eventError, setEventError] = useState<string | null>(null)
+  const [intensity, setIntensityLocal] = useState<NotifIntensity>('normal')
+
+  useEffect(() => { setIntensityLocal(getStoredIntensity()) }, [])
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -100,6 +108,8 @@ export default function CalendarPage() {
     () => expandRecurring(events, rangeStart, rangeEnd),
     [events, rangeStart, rangeEnd]
   )
+
+  useEffect(() => { schedule(visibleEvents) }, [visibleEvents, schedule])
 
   function prevMonth() { setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1)) }
   function nextMonth() { setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1)) }
@@ -132,6 +142,8 @@ export default function CalendarPage() {
       recurring: form.recurring,
       recurrence_interval: form.recurring ? (parseInt(form.recurrence_interval) || 1) : null,
       recurrence_unit: form.recurring ? form.recurrence_unit : null,
+      notify: form.notify,
+      notify_minutes_before: parseInt(form.notify_minutes_before) || 15,
     }
     const err = editEvent ? await updateEvent(editEvent.id, payload) : await addEvent(payload)
     setSaving(false)
@@ -159,6 +171,8 @@ export default function CalendarPage() {
       recurring: ev.recurring ?? false,
       recurrence_interval: String(ev.recurrence_interval ?? 1),
       recurrence_unit: ev.recurrence_unit ?? 'week',
+      notify: ev.notify ?? false,
+      notify_minutes_before: String(ev.notify_minutes_before ?? 15),
     })
     setModalOpen(true)
   }
@@ -179,7 +193,21 @@ export default function CalendarPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Calendario</h1>
           <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 4 }}>Tus eventos y compromisos</p>
         </div>
-        <Btn variant="primary" onClick={() => openNew()}>+ Nuevo evento</Btn>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px' }}>
+            <span style={{ fontSize: 14 }}>🔔</span>
+            <select
+              value={intensity}
+              onChange={e => { const v = e.target.value as NotifIntensity; setIntensityLocal(v); storeIntensity(v) }}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: 12, outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              <option value="silent">Silenciosa</option>
+              <option value="normal">Normal</option>
+              <option value="urgent">Urgente</option>
+            </select>
+          </div>
+          <Btn variant="primary" onClick={() => openNew()}>+ Nuevo evento</Btn>
+        </div>
       </div>
 
       <TabBar
@@ -376,6 +404,36 @@ export default function CalendarPage() {
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 13, padding: '6px 10px', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   {UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Notificación */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <div
+                onClick={() => setForm(p => ({ ...p, notify: !p.notify }))}
+                style={{ width: 40, height: 22, borderRadius: 11, background: form.notify ? 'var(--accent)' : 'var(--border-default)', position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background 0.2s' }}
+              >
+                <div style={{ position: 'absolute', top: 3, left: form.notify ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
+              </div>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', userSelect: 'none' }}>Notificarme</span>
+            </label>
+            {form.notify && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', border: '1px solid var(--border-default)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Avisar</span>
+                <select
+                  value={form.notify_minutes_before}
+                  onChange={e => setForm(p => ({ ...p, notify_minutes_before: e.target.value }))}
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 13, padding: '6px 10px', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  <option value="5">5 min antes</option>
+                  <option value="10">10 min antes</option>
+                  <option value="15">15 min antes</option>
+                  <option value="30">30 min antes</option>
+                  <option value="60">1 hora antes</option>
+                  <option value="120">2 horas antes</option>
                 </select>
               </div>
             )}
