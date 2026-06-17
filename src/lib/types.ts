@@ -98,6 +98,7 @@ export interface CalendarEvent {
   recurrence_unit: 'day' | 'week' | 'month' | null
   notify: boolean
   notify_minutes_before: number | null
+  notify_intensity: 'silent' | 'normal' | 'urgent' | null
   created_at: string
 }
 

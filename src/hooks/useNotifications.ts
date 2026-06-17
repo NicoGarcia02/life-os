@@ -39,7 +39,7 @@ export function useNotifications() {
     if (!granted) return
 
     const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.ready : null
-    const intensity = getStoredIntensity()
+    const globalIntensity = getStoredIntensity()
     const now = Date.now()
 
     for (const ev of events) {
@@ -51,6 +51,7 @@ export function useNotifications() {
       if (delay < 0 || delay > 48 * 60 * 60_000) continue
 
       const timer = setTimeout(async () => {
+        const intensity = ev.notify_intensity ?? globalIntensity
         const opts: NotificationOptions = {
           body: `${ev.time!.slice(0, 5)}${ev.duration ? ` · ${ev.duration} min` : ''} · ${ev.tag}`,
           tag: `${ev.id}-${ev.date}`,

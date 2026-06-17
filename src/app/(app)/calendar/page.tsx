@@ -70,13 +70,14 @@ type FormState = {
   recurrence_unit: 'day' | 'week' | 'month'
   notify: boolean
   notify_minutes_before: string
+  notify_intensity: NotifIntensity
 }
 
 const EMPTY_FORM: FormState = {
   title: '', date: today(), time: '', duration: '60',
   tag: 'Personal', description: '',
   recurring: false, recurrence_interval: '1', recurrence_unit: 'week',
-  notify: false, notify_minutes_before: '15',
+  notify: false, notify_minutes_before: '15', notify_intensity: 'normal',
 }
 
 export default function CalendarPage() {
@@ -144,6 +145,7 @@ export default function CalendarPage() {
       recurrence_unit: form.recurring ? form.recurrence_unit : null,
       notify: form.notify,
       notify_minutes_before: parseInt(form.notify_minutes_before) || 15,
+      notify_intensity: form.notify_intensity,
     }
     const err = editEvent ? await updateEvent(editEvent.id, payload) : await addEvent(payload)
     setSaving(false)
@@ -173,6 +175,7 @@ export default function CalendarPage() {
       recurrence_unit: ev.recurrence_unit ?? 'week',
       notify: ev.notify ?? false,
       notify_minutes_before: String(ev.notify_minutes_before ?? 15),
+      notify_intensity: ev.notify_intensity ?? 'normal',
     })
     setModalOpen(true)
   }
@@ -421,7 +424,7 @@ export default function CalendarPage() {
               <span style={{ fontSize: 13, color: 'var(--text-secondary)', userSelect: 'none' }}>Notificarme</span>
             </label>
             {form.notify && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', border: '1px solid var(--border-default)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', border: '1px solid var(--border-default)', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Avisar</span>
                 <select
                   value={form.notify_minutes_before}
@@ -434,6 +437,16 @@ export default function CalendarPage() {
                   <option value="30">30 min antes</option>
                   <option value="60">1 hora antes</option>
                   <option value="120">2 horas antes</option>
+                </select>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>·</span>
+                <select
+                  value={form.notify_intensity}
+                  onChange={e => setForm(p => ({ ...p, notify_intensity: e.target.value as NotifIntensity }))}
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 13, padding: '6px 10px', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  <option value="silent">🔕 Silenciosa</option>
+                  <option value="normal">🔔 Normal</option>
+                  <option value="urgent">🚨 Urgente</option>
                 </select>
               </div>
             )}
