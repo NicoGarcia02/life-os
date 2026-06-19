@@ -26,6 +26,15 @@ function TaskDetailModal({ task, onClose, onCycleStatus, onUpdateTask }: {
   const [description, setDescription] = useState(task.description ?? '')
   const [newSubtask, setNewSubtask] = useState('')
   const [addingSubtask, setAddingSubtask] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const descRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const el = descRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }, [description, expanded])
 
   function handleTitleBlur() {
     if (title.trim() && title.trim() !== task.title) onUpdateTask({ title: title.trim() })
@@ -46,58 +55,79 @@ function TaskDetailModal({ task, onClose, onCycleStatus, onUpdateTask }: {
 
   const doneCount = subtasks.filter(s => s.completed).length
 
+  const expandBtn = (
+    <button
+      onClick={() => setExpanded(v => !v)}
+      title={expanded ? 'Reducir' : 'Expandir'}
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: 'var(--text-tertiary)', fontSize: 16, lineHeight: 1,
+        padding: 4, borderRadius: 4,
+      }}
+    >{expanded ? '⊟' : '⊞'}</button>
+  )
+
+  const layout = expanded
+    ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }
+    : { display: 'flex', flexDirection: 'column' as const, gap: 16 }
+
   return (
-    <Modal isOpen onClose={onClose} title="" size="md">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Status + title */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-          <button
-            onClick={onCycleStatus}
-            title="Cambiar estado"
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 24, color: TASK_STATUS_COLOR[task.status],
-              flexShrink: 0, lineHeight: 1, padding: '4px 0',
-            }}
-          >{TASK_STATUS_ICON[task.status]}</button>
-          <div style={{ flex: 1 }}>
-            <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+    <Modal isOpen onClose={onClose} title="" size={expanded ? 'xl' : 'md'} headerActions={expandBtn}>
+      <div style={layout}>
+        {/* Left column (or full-width when compact): status + title + description */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Status + title */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <button
+              onClick={onCycleStatus}
+              title="Cambiar estado"
               style={{
-                width: '100%', background: 'transparent', border: 'none',
-                color: 'var(--text-primary)', fontSize: 18, fontWeight: 600,
-                outline: 'none', fontFamily: 'inherit', padding: 0,
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 24, color: TASK_STATUS_COLOR[task.status],
+                flexShrink: 0, lineHeight: 1, padding: '4px 0',
+              }}
+            >{TASK_STATUS_ICON[task.status]}</button>
+            <div style={{ flex: 1 }}>
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                style={{
+                  width: '100%', background: 'transparent', border: 'none',
+                  color: 'var(--text-primary)', fontSize: 18, fontWeight: 600,
+                  outline: 'none', fontFamily: 'inherit', padding: 0,
+                }}
+              />
+              <div style={{ fontSize: 12, color: TASK_STATUS_COLOR[task.status], marginTop: 2, fontWeight: 500 }}>
+                {task.status === 'pendiente' ? 'Pendiente' : task.status === 'en_curso' ? 'En curso' : 'Listo'}
+                <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · click en ícono para cambiar</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: expanded ? 1 : undefined }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Descripción</label>
+            <textarea
+              ref={descRef}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              onBlur={handleDescBlur}
+              placeholder="Agregá contexto o notas sobre esta tarea..."
+              style={{
+                width: '100%',
+                minHeight: expanded ? 260 : 80,
+                background: 'var(--bg-root)', border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 13,
+                padding: '9px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none',
+                boxSizing: 'border-box', lineHeight: 1.6, overflow: 'hidden',
               }}
             />
-            <div style={{ fontSize: 12, color: TASK_STATUS_COLOR[task.status], marginTop: 2, fontWeight: 500 }}>
-              {task.status === 'pendiente' ? 'Pendiente' : task.status === 'en_curso' ? 'En curso' : 'Listo'}
-              <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · click en ícono para cambiar</span>
-            </div>
           </div>
         </div>
 
-        {/* Description */}
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Descripción</label>
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            onBlur={handleDescBlur}
-            placeholder="Agregá contexto o notas sobre esta tarea..."
-            rows={3}
-            style={{
-              width: '100%', background: 'var(--bg-root)', border: '1px solid var(--border-default)',
-              borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 13,
-              padding: '9px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
-
-        {/* Subtasks */}
+        {/* Right column (or below when compact): subtasks */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>

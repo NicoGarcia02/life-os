@@ -8,10 +8,11 @@ interface ModalProps {
   onClose: () => void
   title: string
   children: React.ReactNode
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
+  headerActions?: React.ReactNode
 }
 
-export default function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, size = 'md', headerActions }: ModalProps) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -25,7 +26,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
 
   if (!mounted) return null
 
-  const widths = { sm: 420, md: 540, lg: 700 }
+  const widths = { sm: 420, md: 540, lg: 700, xl: 960 }
 
   return createPortal(
     <AnimatePresence>
@@ -77,18 +78,21 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
               flexShrink: 0,
             }}>
               <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h2>
-              <button
-                onClick={onClose}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-tertiary)',
-                  cursor: 'pointer',
-                  fontSize: 20,
-                  lineHeight: 1,
-                  padding: 4,
-                }}
-              >✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {headerActions}
+                <button
+                  onClick={onClose}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-tertiary)',
+                    cursor: 'pointer',
+                    fontSize: 20,
+                    lineHeight: 1,
+                    padding: 4,
+                  }}
+                >✕</button>
+              </div>
             </div>
             <div style={{ padding: '20px 24px 24px' }}>{children}</div>
           </motion.div>
