@@ -326,12 +326,38 @@ export default function HabitsPage() {
         {tab === 'mes' && (
           <div>
             <div className="grid-3" style={{ gap: 12, marginBottom: 24 }}>
-              <StatCard label="Tasa promedio" value={`${Math.round(avgRate)}%`} />
+              <StatCard label="Tasa promedio" value={`${Math.round(isNaN(avgRate) ? 0 : avgRate)}%`} />
               <StatCard label="Semanas perfectas" value={perfectWeeks} />
               <StatCard label="Hábitos activos" value={habits.length} />
             </div>
+
+            {habits.length > 0 && (
+              <>
+                <SectionHeader title="Completitud por hábito este mes" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28 }}>
+                  {habits.map(h => {
+                    const daysSoFar = new Date().getDate()
+                    const daysCompleted = entries.filter(e =>
+                      e.habit_id === h.id && e.date >= monthStart && e.date <= today() && e.completed
+                    ).length
+                    const rate = daysSoFar > 0 ? Math.round((daysCompleted / daysSoFar) * 100) : 0
+                    return (
+                      <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 18, flexShrink: 0 }}>{h.emoji}</span>
+                        <span style={{ fontSize: 13, width: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>{h.name}</span>
+                        <ProgressBar value={daysCompleted} total={daysSoFar || 1} height={8} style={{ flex: 1 }} />
+                        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', width: 64, textAlign: 'right' }}>
+                          {daysCompleted}/{daysSoFar}d · {rate}%
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
             <SectionHeader title={`Mapa del mes — ${new Date(today()).toLocaleDateString('es-AR', { month: 'long' })}`} />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>
               {DAYS_ES.map(d => <div key={d} style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', paddingBottom: 4 }}>{d}</div>)}
               {(() => {
                 const firstDay = new Date(monthStart + 'T00:00:00').getDay()
@@ -341,17 +367,37 @@ export default function HabitsPage() {
               {monthDays.map(day => {
                 const score = getDayScore(day)
                 const isFuture = day > today()
-                const opacity = isFuture ? 0 : score === 0 ? 0.15 : score <= 33 ? 0.35 : score <= 66 ? 0.65 : 1
+                const bg = isFuture
+                  ? 'var(--bg-elevated)'
+                  : score === 0
+                    ? 'var(--bg-elevated)'
+                    : score <= 33
+                      ? 'rgba(74,222,128,0.25)'
+                      : score <= 66
+                        ? 'rgba(74,222,128,0.55)'
+                        : 'rgba(74,222,128,0.9)'
                 return (
-                  <div key={day} title={`${formatDate(day)}: ${score}%`} style={{
+                  <div key={day} title={`${formatDate(day)}: ${isFuture ? '—' : score + '%'}`} style={{
                     aspectRatio: '1',
+                    minHeight: 28,
                     borderRadius: 4,
-                    background: isFuture ? 'var(--bg-surface)' : score === 0 ? 'var(--bg-active)' : `rgba(74,222,128,${opacity})`,
-                    border: day === today() ? '2px solid var(--accent)' : '1px solid transparent',
+                    background: bg,
+                    border: day === today()
+                      ? '2px solid var(--accent)'
+                      : isFuture
+                        ? '1px solid var(--border-subtle)'
+                        : '1px solid var(--border-subtle)',
                     cursor: 'default',
                   }} />
                 )
               })}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, color: 'var(--text-tertiary)' }}>
+              <span>0%</span>
+              {[0.25, 0.55, 0.9].map((o, i) => (
+                <div key={i} style={{ width: 14, height: 14, borderRadius: 3, background: `rgba(74,222,128,${o})` }} />
+              ))}
+              <span>100%</span>
             </div>
           </div>
         )}

@@ -29,6 +29,60 @@ function getCatColor(cat: string, customCats: string[]): string {
 
 const STORAGE_KEY = 'life-os:note-categories'
 
+function NoteCard({ note, index, customCats, onView, onDelete, onTogglePin }: {
+  note: Note
+  index: number
+  customCats: string[]
+  onView: () => void
+  onDelete: () => void
+  onTogglePin: () => void
+}) {
+  const color = getCatColor(note.category ?? 'General', customCats)
+  return (
+    <div
+      className={`card animate-fade stagger-${Math.min(index + 1, 7)}`}
+      style={{ padding: 18, marginBottom: 12, breakInside: 'avoid', cursor: 'pointer', position: 'relative' }}
+      onClick={onView}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, flex: 1, marginRight: 8 }}>{note.title}</h3>
+        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+          <button
+            onClick={e => { e.stopPropagation(); onTogglePin() }}
+            title={note.pinned ? 'Desfijar' : 'Fijar'}
+            style={{
+              background: note.pinned ? 'var(--accent-muted)' : 'none',
+              border: 'none', cursor: 'pointer', fontSize: 12,
+              padding: '2px 5px', borderRadius: 4,
+              color: note.pinned ? 'var(--accent)' : 'var(--text-tertiary)',
+            }}
+          >📌</button>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '2px 4px', borderRadius: 4 }}
+          >✕</button>
+        </div>
+      </div>
+      {note.content && (
+        <p style={{
+          fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6,
+          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+          overflow: 'hidden', marginBottom: 12,
+        }}>{note.content}</p>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{
+          fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 4,
+          background: `${color}22`, color,
+        }}>{note.category}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+          {formatDate((note.updated_at || note.created_at).slice(0, 10))}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function loadCustomCats(): string[] {
   if (typeof window === 'undefined') return []
   try {
@@ -104,6 +158,9 @@ export default function NotesPage() {
     ))
   }, [notes, search])
 
+  const pinnedNotes = useMemo(() => filtered.filter(n => n.pinned), [filtered])
+  const otherNotes = useMemo(() => filtered.filter(n => !n.pinned), [filtered])
+
   if (loading) return <div style={{ color: 'var(--text-tertiary)', padding: 40 }}>Cargando...</div>
 
   return (
@@ -129,68 +186,86 @@ export default function NotesPage() {
       ) : filtered.length === 0 ? (
         <EmptyState icon="🔍" title="Sin resultados" description={`No encontramos notas con "${search}"`} />
       ) : (
-        <div style={{ columns: '3 280px', gap: 12 }}>
-          <div
-            onClick={openNew}
-            style={{
-              border: '2px dashed var(--border-default)',
-              borderRadius: 'var(--radius-md)',
-              padding: 20,
-              cursor: 'pointer',
-              color: 'var(--text-tertiary)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              fontSize: 14,
-              marginBottom: 12,
-              breakInside: 'avoid',
-            }}
-          >
-            <span style={{ fontSize: 20 }}>+</span> Nueva nota
-          </div>
-
-          {filtered.map((note, i) => {
-            const color = getCatColor(note.category ?? 'General', customCats)
-            return (
-              <div
-                key={note.id}
-                className={`card animate-fade stagger-${Math.min(i + 1, 7)}`}
-                style={{ padding: 18, marginBottom: 12, breakInside: 'avoid', cursor: 'pointer' }}
-                onClick={() => setViewNote(note)}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, flex: 1, marginRight: 8 }}>
-                    {note.pinned && <span style={{ fontSize: 12, marginRight: 4 }}>📌</span>}{note.title}
-                  </h3>
-                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                    <button
-                      onClick={e => { e.stopPropagation(); togglePin(note.id, !note.pinned) }}
-                      title={note.pinned ? 'Desfijar' : 'Fijar'}
-                      style={{ background: note.pinned ? 'var(--accent-muted)' : 'none', border: 'none', color: note.pinned ? 'var(--accent)' : 'var(--text-tertiary)', cursor: 'pointer', fontSize: 12, padding: '2px 5px', borderRadius: 4 }}
-                    >📌</button>
-                    <button
-                      onClick={e => { e.stopPropagation(); setConfirmDelete(note.id) }}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 14, padding: '2px 4px', borderRadius: 4 }}
-                    >✕</button>
-                  </div>
-                </div>
-                {note.content && (
-                  <p style={{
-                    fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6,
-                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden', marginBottom: 12,
-                  }}>{note.content}</p>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 4,
-                    background: `${color}22`, color,
-                  }}>{note.category}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                    {formatDate((note.updated_at || note.created_at).slice(0, 10))}
-                  </span>
-                </div>
+        <div>
+          {/* Sección FIJADAS */}
+          {pinnedNotes.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                📌 Fijadas
               </div>
-            )
-          })}
+              <div style={{ columns: '3 280px', gap: 12 }}>
+                {pinnedNotes.map((note, i) => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    index={i}
+                    customCats={customCats}
+                    onView={() => setViewNote(note)}
+                    onDelete={() => setConfirmDelete(note.id)}
+                    onTogglePin={() => togglePin(note.id, !note.pinned)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sección OTRAS */}
+          {otherNotes.length > 0 && (
+            <div>
+              {pinnedNotes.length > 0 && (
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                  Otras
+                </div>
+              )}
+              <div style={{ columns: '3 280px', gap: 12 }}>
+                <div
+                  onClick={openNew}
+                  style={{
+                    border: '2px dashed var(--border-default)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 20,
+                    cursor: 'pointer',
+                    color: 'var(--text-tertiary)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    fontSize: 14,
+                    marginBottom: 12,
+                    breakInside: 'avoid',
+                  }}
+                >
+                  <span style={{ fontSize: 20 }}>+</span> Nueva nota
+                </div>
+                {otherNotes.map((note, i) => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    index={i}
+                    customCats={customCats}
+                    onView={() => setViewNote(note)}
+                    onDelete={() => setConfirmDelete(note.id)}
+                    onTogglePin={() => togglePin(note.id, !note.pinned)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Si no hay otras, igual mostrar botón de nueva nota */}
+          {otherNotes.length === 0 && pinnedNotes.length > 0 && (
+            <div
+              onClick={openNew}
+              style={{
+                border: '2px dashed var(--border-default)',
+                borderRadius: 'var(--radius-md)',
+                padding: 20,
+                cursor: 'pointer',
+                color: 'var(--text-tertiary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                fontSize: 14,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>+</span> Nueva nota
+            </div>
+          )}
         </div>
       )}
 
