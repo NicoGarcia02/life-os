@@ -9,6 +9,7 @@ const NAV = [
   { href: '/sleep', icon: '◑', label: 'Sueño' },
   { href: '/finances', icon: '$', label: 'Finanzas' },
   { href: '/calendar', icon: '▦', label: 'Calendario' },
+  { href: '/projects', icon: '◧', label: 'Proyectos' },
   { href: '/weekly-tasks', icon: '⊟', label: 'Semana' },
   { href: '/tasks', icon: '☑', label: 'Tareas' },
   { href: '/notes', icon: '✎', label: 'Notas' },

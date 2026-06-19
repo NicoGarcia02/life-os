@@ -8,6 +8,7 @@ import { Input, SelectInput } from '@/components/ui/Input'
 import EmptyState from '@/components/ui/EmptyState'
 import { useCalendar } from '@/hooks/useCalendar'
 import { useNotifications, getStoredIntensity, storeIntensity, type NotifIntensity } from '@/hooks/useNotifications'
+import { useProjectCalendar, type ProjectCalendarItem } from '@/hooks/useProjectCalendar'
 import { today, formatDate, TAG_COLORS } from '@/lib/utils'
 import type { CalendarEvent } from '@/lib/types'
 
@@ -93,6 +94,12 @@ export default function CalendarPage() {
   const [eventError, setEventError] = useState<string | null>(null)
   const [intensity, setIntensityLocal] = useState<NotifIntensity>('normal')
 
+  // Project calendar items
+  const [projectModalOpen, setProjectModalOpen] = useState(false)
+  const [editingProjectItem, setEditingProjectItem] = useState<ProjectCalendarItem | null>(null)
+  const [projectItemForm, setProjectItemForm] = useState({ title: '', date: '' })
+  const [projectSaving, setProjectSaving] = useState(false)
+
   useEffect(() => { setIntensityLocal(getStoredIntensity()) }, [])
 
   const year = currentDate.getFullYear()
@@ -100,6 +107,8 @@ export default function CalendarPage() {
 
   const rangeStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
   const rangeEnd = dateToStr(new Date(year, month + 1, 0))
+
+  const { items: projectItems, updateMilestone: updateProjectMilestone, updateDeadline: updateProjectDeadline } = useProjectCalendar(rangeStart, rangeEnd)
 
   useEffect(() => {
     fetchEvents(rangeStart, rangeEnd)
@@ -187,6 +196,26 @@ export default function CalendarPage() {
     setForm(EMPTY_FORM)
   }
 
+  function openProjectItemEdit(item: ProjectCalendarItem) {
+    setEditingProjectItem(item)
+    setProjectItemForm({ title: item.title, date: item.date })
+    setProjectModalOpen(true)
+  }
+
+  async function handleProjectItemSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingProjectItem) return
+    setProjectSaving(true)
+    if (editingProjectItem.type === 'milestone') {
+      await updateProjectMilestone(editingProjectItem.rawId, projectItemForm.title, projectItemForm.date)
+    } else {
+      await updateProjectDeadline(editingProjectItem.rawId, projectItemForm.date)
+    }
+    setProjectSaving(false)
+    setProjectModalOpen(false)
+    setEditingProjectItem(null)
+  }
+
   if (loading) return <div style={{ color: 'var(--text-tertiary)', padding: 40 }}>Cargando...</div>
 
   return (
@@ -244,8 +273,10 @@ export default function CalendarPage() {
               {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
                 const dayEvents = getEventsForDay(dateStr)
+                const dayProjectItems = projectItems.filter(p => p.date === dateStr)
                 const isToday = dateStr === todayStr
                 const isSelected = dateStr === selectedDay
+                const totalVisible = dayEvents.length + dayProjectItems.length
                 return (
                   <div
                     key={day}
@@ -271,7 +302,17 @@ export default function CalendarPage() {
                         {ev.recurring ? '🔁 ' : ''}{ev.time?.slice(0, 5) ?? ''} {ev.title}
                       </div>
                     ))}
-                    {dayEvents.length > 2 && <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>+{dayEvents.length - 2} más</div>}
+                    {dayProjectItems.slice(0, Math.max(0, 2 - dayEvents.length)).map(item => (
+                      <div key={item.id} style={{
+                        fontSize: 10, fontWeight: 500,
+                        padding: '2px 4px', borderRadius: 3, marginBottom: 2,
+                        background: `${item.projectColor}22`, color: item.projectColor,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {item.type === 'deadline' ? '⚑' : '◈'} {item.title}
+                      </div>
+                    ))}
+                    {totalVisible > 2 && <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>+{totalVisible - 2} más</div>}
                   </div>
                 )
               })}
@@ -281,13 +322,14 @@ export default function CalendarPage() {
             {(selectedDay || todayStr) && (() => {
               const showDate = selectedDay ?? todayStr
               const showEvents = getEventsForDay(showDate)
+              const showProjectItems = projectItems.filter(p => p.date === showDate)
               return (
                 <div className="card" style={{ marginTop: 20, padding: 20 }}>
                   <SectionHeader
                     title={showDate === todayStr ? 'Hoy' : formatDate(showDate, { weekday: 'long', day: 'numeric', month: 'long' })}
                     action={<Btn variant="secondary" size="sm" onClick={() => openNew(showDate)}>+ Evento</Btn>}
                   />
-                  {showEvents.length === 0 ? (
+                  {showEvents.length === 0 && showProjectItems.length === 0 ? (
                     <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '12px 0' }}>Sin eventos para este día</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -312,6 +354,24 @@ export default function CalendarPage() {
                           <Btn variant="danger" size="sm" onClick={async () => { await deleteEvent(ev.id); fetchEvents(rangeStart, rangeEnd) }}>✕</Btn>
                         </div>
                       ))}
+                      {showProjectItems.map(item => (
+                        <div key={item.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                          <div style={{ width: 3, minHeight: 40, borderRadius: 2, background: item.projectColor, flexShrink: 0, marginTop: 2 }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 14, fontWeight: 500 }}>
+                              {item.type === 'deadline' ? '⚑' : '◈'} {item.title}
+                            </div>
+                            <div style={{ fontSize: 12, marginTop: 2 }}>
+                              <span style={{ color: item.projectColor }}>{item.projectName}</span>
+                              <span style={{ color: 'var(--text-tertiary)', marginLeft: 6 }}>
+                                {item.type === 'deadline' ? 'Deadline' : 'Hito'}
+                                {item.type === 'milestone' && item.achieved ? ' · ✓ Logrado' : ''}
+                              </span>
+                            </div>
+                          </div>
+                          <Btn variant="ghost" size="sm" onClick={() => openProjectItemEdit(item)}>✎</Btn>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -320,50 +380,85 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {tab === 'agenda' && (
-          <div>
-            {Object.keys(groupedByDate).length === 0 ? (
-              <EmptyState icon="▦" title="Sin eventos este mes" action={{ label: '+ Nuevo evento', onClick: () => openNew() }} />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {Object.entries(groupedByDate).map(([date, dayEvs]) => (
-                  <div key={date} className="card" style={{ padding: 20 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: date === todayStr ? 'var(--accent)' : 'var(--text-secondary)', marginBottom: 14 }}>
-                      {date === todayStr ? 'Hoy' : formatDate(date, { weekday: 'long', day: 'numeric', month: 'long' })}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {dayEvs.map((ev, i) => (
-                        <div key={ev.id + i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                          <div style={{ width: 3, minHeight: 44, borderRadius: 2, background: TAG_COLORS[ev.tag] ?? 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
-                          <div style={{ width: 52, fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', flexShrink: 0, paddingTop: 2 }}>
-                            {ev.time?.slice(0, 5) ?? '—'}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {ev.title}
-                              {ev.recurring && (
-                                <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>
-                                  🔁 c/{ev.recurrence_interval} {UNITS.find(u => u.value === ev.recurrence_unit)?.label}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ display: 'flex', gap: 8, marginTop: 3, flexWrap: 'wrap' }}>
-                              {ev.duration && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.duration}min</span>}
-                              <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: `${TAG_COLORS[ev.tag] ?? 'var(--accent)'}22`, color: TAG_COLORS[ev.tag] ?? 'var(--accent)' }}>{ev.tag}</span>
-                            </div>
-                            {ev.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5, whiteSpace: 'pre-wrap' }}>{ev.description}</div>}
-                          </div>
-                          <Btn variant="ghost" size="sm" onClick={() => openEdit(ev)}>✎</Btn>
-                          <Btn variant="danger" size="sm" onClick={async () => { await deleteEvent(ev.id); fetchEvents(rangeStart, rangeEnd) }}>✕</Btn>
+        {tab === 'agenda' && (() => {
+          const agendaGrouped: Record<string, { events: CalendarEvent[]; projectItems: ProjectCalendarItem[] }> = {}
+          visibleEvents.forEach(ev => {
+            if (!agendaGrouped[ev.date]) agendaGrouped[ev.date] = { events: [], projectItems: [] }
+            agendaGrouped[ev.date].events.push(ev)
+          })
+          projectItems.forEach(item => {
+            if (!agendaGrouped[item.date]) agendaGrouped[item.date] = { events: [], projectItems: [] }
+            agendaGrouped[item.date].projectItems.push(item)
+          })
+          const sortedDates = Object.keys(agendaGrouped).sort()
+          return (
+            <div>
+              {sortedDates.length === 0 ? (
+                <EmptyState icon="▦" title="Sin eventos este mes" action={{ label: '+ Nuevo evento', onClick: () => openNew() }} />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {sortedDates.map(date => {
+                    const { events: dayEvs, projectItems: dayProj } = agendaGrouped[date]
+                    return (
+                      <div key={date} className="card" style={{ padding: 20 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: date === todayStr ? 'var(--accent)' : 'var(--text-secondary)', marginBottom: 14 }}>
+                          {date === todayStr ? 'Hoy' : formatDate(date, { weekday: 'long', day: 'numeric', month: 'long' })}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {dayEvs.map((ev, i) => (
+                            <div key={ev.id + i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                              <div style={{ width: 3, minHeight: 44, borderRadius: 2, background: TAG_COLORS[ev.tag] ?? 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
+                              <div style={{ width: 52, fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', flexShrink: 0, paddingTop: 2 }}>
+                                {ev.time?.slice(0, 5) ?? '—'}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  {ev.title}
+                                  {ev.recurring && (
+                                    <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>
+                                      🔁 c/{ev.recurrence_interval} {UNITS.find(u => u.value === ev.recurrence_unit)?.label}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ display: 'flex', gap: 8, marginTop: 3, flexWrap: 'wrap' }}>
+                                  {ev.duration && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.duration}min</span>}
+                                  <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: `${TAG_COLORS[ev.tag] ?? 'var(--accent)'}22`, color: TAG_COLORS[ev.tag] ?? 'var(--accent)' }}>{ev.tag}</span>
+                                </div>
+                                {ev.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5, whiteSpace: 'pre-wrap' }}>{ev.description}</div>}
+                              </div>
+                              <Btn variant="ghost" size="sm" onClick={() => openEdit(ev)}>✎</Btn>
+                              <Btn variant="danger" size="sm" onClick={async () => { await deleteEvent(ev.id); fetchEvents(rangeStart, rangeEnd) }}>✕</Btn>
+                            </div>
+                          ))}
+                          {dayProj.map(item => (
+                            <div key={item.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                              <div style={{ width: 3, minHeight: 44, borderRadius: 2, background: item.projectColor, flexShrink: 0, marginTop: 2 }} />
+                              <div style={{ width: 52, fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', flexShrink: 0, paddingTop: 2 }}>
+                                {item.type === 'deadline' ? '⚑' : '◈'}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 500 }}>{item.title}</div>
+                                <div style={{ display: 'flex', gap: 8, marginTop: 3 }}>
+                                  <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: `${item.projectColor}22`, color: item.projectColor }}>
+                                    {item.type === 'deadline' ? 'Deadline' : 'Hito'} · {item.projectName}
+                                  </span>
+                                  {item.type === 'milestone' && item.achieved && (
+                                    <span style={{ fontSize: 11, color: 'var(--green)' }}>✓ Logrado</span>
+                                  )}
+                                </div>
+                              </div>
+                              <Btn variant="ghost" size="sm" onClick={() => openProjectItemEdit(item)}>✎</Btn>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       <Modal isOpen={modalOpen} onClose={closeModal} title={editEvent ? 'Editar evento' : 'Nuevo evento'} size="sm">
@@ -469,6 +564,41 @@ export default function CalendarPage() {
             <Btn variant="primary" type="submit" loading={saving}>{editEvent ? 'Guardar' : 'Crear evento'}</Btn>
           </div>
         </form>
+      </Modal>
+      {/* Project item edit modal */}
+      <Modal
+        isOpen={projectModalOpen}
+        onClose={() => { setProjectModalOpen(false); setEditingProjectItem(null) }}
+        title={editingProjectItem?.type === 'deadline' ? 'Editar deadline' : 'Editar hito'}
+        size="sm"
+      >
+        {editingProjectItem && (
+          <form onSubmit={handleProjectItemSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '6px 10px', background: 'var(--bg-active)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: editingProjectItem.projectColor, flexShrink: 0 }} />
+              {editingProjectItem.projectName}
+            </div>
+            {editingProjectItem.type === 'milestone' && (
+              <Input
+                label="Título del hito"
+                value={projectItemForm.title}
+                onChange={e => setProjectItemForm(p => ({ ...p, title: e.target.value }))}
+                required
+              />
+            )}
+            <Input
+              label={editingProjectItem.type === 'deadline' ? 'Fecha de deadline' : 'Fecha del hito'}
+              type="date"
+              value={projectItemForm.date}
+              onChange={e => setProjectItemForm(p => ({ ...p, date: e.target.value }))}
+              required
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <Btn variant="ghost" type="button" onClick={() => setProjectModalOpen(false)}>Cancelar</Btn>
+              <Btn variant="primary" type="submit" loading={projectSaving}>Guardar</Btn>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   )

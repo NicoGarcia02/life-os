@@ -110,3 +110,36 @@ export interface DailyClosing {
   journal: string | null
   created_at: string
 }
+
+export interface Project {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  notes: string | null
+  category: 'personal' | 'profesional' | 'estudio' | 'otro'
+  status: 'planificando' | 'en_curso' | 'pausado' | 'completado'
+  color: string
+  start_date: string | null
+  deadline: string | null
+  created_at: string
+}
+
+export interface ProjectTask {
+  id: string
+  project_id: string
+  user_id: string
+  title: string
+  status: 'pendiente' | 'en_curso' | 'listo'
+  created_at: string
+}
+
+export interface ProjectMilestone {
+  id: string
+  project_id: string
+  user_id: string
+  title: string
+  date: string
+  achieved: boolean
+  created_at: string
+}
