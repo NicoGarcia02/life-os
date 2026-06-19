@@ -37,6 +37,11 @@ export function useProjectTasks(projectId: string) {
     await fetchTasks()
   }, [fetchTasks])
 
+  const updateTask = useCallback(async (id: string, updates: { title?: string; description?: string }) => {
+    await supabase.from('project_tasks').update(updates).eq('id', id)
+    await fetchTasks()
+  }, [fetchTasks])
+
   const deleteTask = useCallback(async (id: string) => {
     await supabase.from('project_tasks').delete().eq('id', id)
     await fetchTasks()
@@ -44,5 +49,5 @@ export function useProjectTasks(projectId: string) {
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
 
-  return { tasks, loading, addTask, cycleStatus, deleteTask }
+  return { tasks, loading, addTask, cycleStatus, updateTask, deleteTask }
 }

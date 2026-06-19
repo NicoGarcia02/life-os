@@ -11,8 +11,144 @@ import EmptyState from '@/components/ui/EmptyState'
 import { useProjects } from '@/hooks/useProjects'
 import { useProjectTasks } from '@/hooks/useProjectTasks'
 import { useProjectMilestones } from '@/hooks/useProjectMilestones'
+import { useProjectSubtasks } from '@/hooks/useProjectSubtasks'
 import { formatDate } from '@/lib/utils'
-import type { Project } from '@/lib/types'
+import type { Project, ProjectTask } from '@/lib/types'
+
+function TaskDetailModal({ task, onClose, onCycleStatus, onUpdateTask }: {
+  task: ProjectTask
+  onClose: () => void
+  onCycleStatus: () => void
+  onUpdateTask: (updates: { title?: string; description?: string }) => void
+}) {
+  const { subtasks, addSubtask, toggleSubtask, deleteSubtask } = useProjectSubtasks(task.id)
+  const [title, setTitle] = useState(task.title)
+  const [description, setDescription] = useState(task.description ?? '')
+  const [newSubtask, setNewSubtask] = useState('')
+  const [addingSubtask, setAddingSubtask] = useState(false)
+
+  function handleTitleBlur() {
+    if (title.trim() && title.trim() !== task.title) onUpdateTask({ title: title.trim() })
+  }
+
+  function handleDescBlur() {
+    if (description !== (task.description ?? '')) onUpdateTask({ description: description || '' })
+  }
+
+  async function handleAddSubtask(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newSubtask.trim()) return
+    setAddingSubtask(true)
+    await addSubtask(newSubtask.trim())
+    setNewSubtask('')
+    setAddingSubtask(false)
+  }
+
+  const doneCount = subtasks.filter(s => s.completed).length
+
+  return (
+    <Modal isOpen onClose={onClose} title="" size="md">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Status + title */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <button
+            onClick={onCycleStatus}
+            title="Cambiar estado"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 24, color: TASK_STATUS_COLOR[task.status],
+              flexShrink: 0, lineHeight: 1, padding: '4px 0',
+            }}
+          >{TASK_STATUS_ICON[task.status]}</button>
+          <div style={{ flex: 1 }}>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onBlur={handleTitleBlur}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              style={{
+                width: '100%', background: 'transparent', border: 'none',
+                color: 'var(--text-primary)', fontSize: 18, fontWeight: 600,
+                outline: 'none', fontFamily: 'inherit', padding: 0,
+              }}
+            />
+            <div style={{ fontSize: 12, color: TASK_STATUS_COLOR[task.status], marginTop: 2, fontWeight: 500 }}>
+              {task.status === 'pendiente' ? 'Pendiente' : task.status === 'en_curso' ? 'En curso' : 'Listo'}
+              <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · click en ícono para cambiar</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Descripción</label>
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            onBlur={handleDescBlur}
+            placeholder="Agregá contexto o notas sobre esta tarea..."
+            rows={3}
+            style={{
+              width: '100%', background: 'var(--bg-root)', border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 13,
+              padding: '9px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
+        {/* Subtasks */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Subtareas {subtasks.length > 0 && `(${doneCount}/${subtasks.length})`}
+            </label>
+          </div>
+
+          {subtasks.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+              {subtasks.map(sub => (
+                <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)' }}>
+                  <button
+                    onClick={() => toggleSubtask(sub.id, sub.completed)}
+                    style={{
+                      width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: 'pointer',
+                      border: `2px solid ${sub.completed ? 'var(--green)' : 'var(--border-default)'}`,
+                      background: sub.completed ? 'var(--green)' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {sub.completed && <span style={{ color: '#000', fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                  </button>
+                  <span style={{
+                    flex: 1, fontSize: 13,
+                    textDecoration: sub.completed ? 'line-through' : 'none',
+                    color: sub.completed ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                  }}>{sub.title}</span>
+                  <button
+                    onClick={() => deleteSubtask(sub.id)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 12, padding: '2px 4px', opacity: 0.6 }}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleAddSubtask} style={{ display: 'flex', gap: 8 }}>
+            <input
+              className="input-base"
+              placeholder="+ Nueva subtarea..."
+              value={newSubtask}
+              onChange={e => setNewSubtask(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <Btn variant="secondary" type="submit" loading={addingSubtask}>Agregar</Btn>
+          </form>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 const PROJECT_COLORS = [
   '#7c9aff', '#4ade80', '#f87171', '#fbbf24',
@@ -46,10 +182,11 @@ export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const { projects, loading: projectsLoading, updateProject, deleteProject } = useProjects()
-  const { tasks, addTask, cycleStatus, deleteTask } = useProjectTasks(id)
+  const { tasks, addTask, cycleStatus, updateTask, deleteTask } = useProjectTasks(id)
   const { milestones, addMilestone, updateMilestone, deleteMilestone } = useProjectMilestones(id)
 
   const [tab, setTab] = useState('tareas')
+  const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -223,10 +360,11 @@ export default function ProjectDetailPage() {
                 <div
                   key={task.id}
                   className="card"
-                  style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}
+                  onClick={() => setSelectedTask(task)}
+                  style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
                 >
                   <button
-                    onClick={() => cycleStatus(task.id, task.status)}
+                    onClick={e => { e.stopPropagation(); cycleStatus(task.id, task.status) }}
                     title="Cambiar estado"
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
@@ -234,20 +372,27 @@ export default function ProjectDetailPage() {
                       flexShrink: 0, lineHeight: 1, padding: 0,
                     }}
                   >{TASK_STATUS_ICON[task.status]}</button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{
+                      fontSize: 14,
+                      textDecoration: task.status === 'listo' ? 'line-through' : 'none',
+                      color: task.status === 'listo' ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                    }}>{task.title}</span>
+                    {task.description && (
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {task.description}
+                      </div>
+                    )}
+                  </div>
                   <span style={{
-                    flex: 1, fontSize: 14,
-                    textDecoration: task.status === 'listo' ? 'line-through' : 'none',
-                    color: task.status === 'listo' ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                  }}>{task.title}</span>
-                  <span style={{
-                    fontSize: 11, padding: '2px 7px', borderRadius: 4,
+                    fontSize: 11, padding: '2px 7px', borderRadius: 4, flexShrink: 0,
                     background: `${TASK_STATUS_COLOR[task.status]}1a`,
                     color: TASK_STATUS_COLOR[task.status],
                   }}>
                     {task.status === 'pendiente' ? 'Pendiente' : task.status === 'en_curso' ? 'En curso' : 'Listo'}
                   </span>
                   <button
-                    onClick={() => deleteTask(task.id)}
+                    onClick={e => { e.stopPropagation(); deleteTask(task.id) }}
                     style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: 13, padding: '2px 4px', borderRadius: 4 }}
                   >✕</button>
                 </div>
@@ -356,6 +501,16 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Task detail modal */}
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onCycleStatus={() => { cycleStatus(selectedTask.id, selectedTask.status); setSelectedTask(t => t ? { ...t, status: ({ pendiente: 'en_curso', en_curso: 'listo', listo: 'pendiente' } as const)[t.status] } : null) }}
+          onUpdateTask={(updates) => { updateTask(selectedTask.id, updates); setSelectedTask(t => t ? { ...t, ...updates } : null) }}
+        />
+      )}
 
       {/* Edit project modal */}
       {editForm && (
