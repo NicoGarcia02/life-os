@@ -28,6 +28,48 @@ function TaskDetailModal({ task, onClose, onCycleStatus, onUpdateTask }: {
   const [addingSubtask, setAddingSubtask] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const descRef = useRef<HTMLTextAreaElement>(null)
+  const [subtaskOrder, setSubtaskOrder] = useState<string[]>([])
+  const [dragSubId, setDragSubId] = useState<string | null>(null)
+  const [dragOverSubId, setDragOverSubId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (subtasks.length === 0) { setSubtaskOrder([]); return }
+    const stored = localStorage.getItem(`subtask-order-${task.id}`)
+    if (stored) {
+      try {
+        const parsed: string[] = JSON.parse(stored)
+        const valid = parsed.filter(sid => subtasks.some(s => s.id === sid))
+        const newIds = subtasks.filter(s => !parsed.includes(s.id)).map(s => s.id)
+        setSubtaskOrder([...valid, ...newIds])
+      } catch { setSubtaskOrder(subtasks.map(s => s.id)) }
+    } else {
+      setSubtaskOrder(subtasks.map(s => s.id))
+    }
+  }, [subtasks, task.id])
+
+  const orderedSubtasks = subtaskOrder.length > 0
+    ? subtaskOrder.map(sid => subtasks.find(s => s.id === sid)).filter((s): s is typeof subtasks[0] => !!s)
+    : subtasks
+
+  function handleSubDragStart(e: React.DragEvent, subId: string) {
+    setDragSubId(subId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleSubDrop(e: React.DragEvent, targetId: string) {
+    e.preventDefault()
+    setDragOverSubId(null)
+    if (!dragSubId || dragSubId === targetId) return
+    const newOrder = [...subtaskOrder]
+    const fromIdx = newOrder.indexOf(dragSubId)
+    const toIdx = newOrder.indexOf(targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+    newOrder.splice(fromIdx, 1)
+    newOrder.splice(toIdx, 0, dragSubId)
+    setSubtaskOrder(newOrder)
+    localStorage.setItem(`subtask-order-${task.id}`, JSON.stringify(newOrder))
+    setDragSubId(null)
+  }
 
   useEffect(() => {
     const el = descRef.current
@@ -135,10 +177,17 @@ function TaskDetailModal({ task, onClose, onCycleStatus, onUpdateTask }: {
             </label>
           </div>
 
-          {subtasks.length > 0 && (
+          {orderedSubtasks.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-              {subtasks.map(sub => (
-                <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)' }}>
+              {orderedSubtasks.map(sub => (
+                <div key={sub.id}
+                  draggable
+                  onDragStart={e => handleSubDragStart(e, sub.id)}
+                  onDragOver={e => { e.preventDefault(); setDragOverSubId(sub.id) }}
+                  onDragLeave={() => setDragOverSubId(null)}
+                  onDrop={e => handleSubDrop(e, sub.id)}
+                  onDragEnd={() => { setDragSubId(null); setDragOverSubId(null) }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)', cursor: 'grab', opacity: dragSubId === sub.id ? 0.4 : 1, outline: dragOverSubId === sub.id && dragSubId !== sub.id ? '2px solid var(--accent)' : 'none' }}>
                   <button
                     onClick={() => toggleSubtask(sub.id, sub.completed)}
                     style={{
@@ -234,6 +283,11 @@ export default function ProjectDetailPage() {
   const [addingMilestone, setAddingMilestone] = useState(false)
   const [milestoneSaving, setMilestoneSaving] = useState(false)
 
+  // Task ordering
+  const [taskOrder, setTaskOrder] = useState<string[]>([])
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null)
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null)
+
   // Notes autosave
   const [notes, setNotes] = useState('')
   const [notesSaved, setNotesSaved] = useState(true)
@@ -244,6 +298,51 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (project) setNotes(project.notes ?? '')
   }, [project?.id])
+
+  useEffect(() => {
+    if (tasks.length === 0) { setTaskOrder([]); return }
+    const stored = localStorage.getItem(`task-order-${id}`)
+    if (stored) {
+      try {
+        const parsed: string[] = JSON.parse(stored)
+        const valid = parsed.filter(tid => tasks.some(t => t.id === tid))
+        const newIds = tasks.filter(t => !parsed.includes(t.id)).map(t => t.id)
+        setTaskOrder([...valid, ...newIds])
+      } catch { setTaskOrder(tasks.map(t => t.id)) }
+    } else {
+      setTaskOrder(tasks.map(t => t.id))
+    }
+  }, [tasks, id])
+
+  const orderedTasks = taskOrder.length > 0
+    ? taskOrder.map(tid => tasks.find(t => t.id === tid)).filter((t): t is ProjectTask => !!t)
+    : tasks
+
+  function handleTaskDragStart(e: React.DragEvent, taskId: string) {
+    setDragTaskId(taskId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleTaskDragOver(e: React.DragEvent, taskId: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragTaskId && dragTaskId !== taskId) setDragOverTaskId(taskId)
+  }
+
+  function handleTaskDrop(e: React.DragEvent, targetId: string) {
+    e.preventDefault()
+    setDragOverTaskId(null)
+    if (!dragTaskId || dragTaskId === targetId) return
+    const newOrder = [...taskOrder]
+    const fromIdx = newOrder.indexOf(dragTaskId)
+    const toIdx = newOrder.indexOf(targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+    newOrder.splice(fromIdx, 1)
+    newOrder.splice(toIdx, 0, dragTaskId)
+    setTaskOrder(newOrder)
+    localStorage.setItem(`task-order-${id}`, JSON.stringify(newOrder))
+    setDragTaskId(null)
+  }
 
   const saveNotes = useCallback(async (value: string) => {
     if (!project) return
@@ -386,13 +485,20 @@ export default function ProjectDetailPage() {
               <EmptyState icon="○" title="Sin tareas todavía" description="Agregá las tareas de este proyecto." />
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-              {tasks.map(task => (
+              {orderedTasks.map(task => (
                 <div
                   key={task.id}
                   className="card"
+                  draggable
+                  onDragStart={e => handleTaskDragStart(e, task.id)}
+                  onDragOver={e => handleTaskDragOver(e, task.id)}
+                  onDragLeave={() => setDragOverTaskId(null)}
+                  onDrop={e => handleTaskDrop(e, task.id)}
+                  onDragEnd={() => { setDragTaskId(null); setDragOverTaskId(null) }}
                   onClick={() => setSelectedTask(task)}
-                  style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+                  style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'grab', opacity: dragTaskId === task.id ? 0.4 : 1, outline: dragOverTaskId === task.id ? '2px solid var(--accent)' : 'none' }}
                 >
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: 14, userSelect: 'none', flexShrink: 0, lineHeight: 1 }}>⠿</span>
                   <button
                     onClick={e => { e.stopPropagation(); cycleStatus(task.id, task.status) }}
                     title="Cambiar estado"

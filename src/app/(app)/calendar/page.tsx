@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import TabBar from '@/components/ui/TabBar'
 import SectionHeader from '@/components/ui/SectionHeader'
 import Modal from '@/components/ui/Modal'
@@ -93,6 +93,9 @@ export default function CalendarPage() {
   const [saving, setSaving] = useState(false)
   const [eventError, setEventError] = useState<string | null>(null)
   const [intensity, setIntensityLocal] = useState<NotifIntensity>('normal')
+  const [dragEventId, setDragEventId] = useState<string | null>(null)
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null)
+  const dragEndedRef = useRef(false)
 
   // Project calendar items
   const [projectModalOpen, setProjectModalOpen] = useState(false)
@@ -281,24 +284,44 @@ export default function CalendarPage() {
                   <div
                     key={day}
                     className="cal-cell"
-                    onClick={() => setSelectedDay(isSelected ? null : dateStr)}
+                    onClick={() => {
+                      if (dragEndedRef.current) { dragEndedRef.current = false; return }
+                      setSelectedDay(isSelected ? null : dateStr)
+                    }}
+                    onDragOver={e => { e.preventDefault(); setDragOverDate(dateStr) }}
+                    onDragLeave={() => setDragOverDate(null)}
+                    onDrop={async e => {
+                      e.preventDefault()
+                      setDragOverDate(null)
+                      if (!dragEventId) return
+                      const orig = events.find(ev => ev.id === dragEventId)
+                      if (orig && orig.date !== dateStr) {
+                        await updateEvent(dragEventId, { date: dateStr })
+                      }
+                      setDragEventId(null)
+                    }}
                     style={{
                       height: 80, overflow: 'hidden', padding: '8px 6px',
                       borderRadius: 'var(--radius-sm)',
-                      background: isSelected ? 'var(--accent-muted)' : isToday ? 'var(--bg-hover)' : 'var(--bg-elevated)',
-                      border: `1px solid ${isToday || isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
+                      background: dragOverDate === dateStr && dragEventId ? 'rgba(124,154,255,0.15)' : isSelected ? 'var(--accent-muted)' : isToday ? 'var(--bg-hover)' : 'var(--bg-elevated)',
+                      border: `1px solid ${dragOverDate === dateStr && dragEventId ? 'var(--accent)' : isToday || isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
                       cursor: 'pointer', transition: 'background 0.15s',
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--accent)' : 'var(--text-primary)', marginBottom: 4 }}>{day}</div>
                     {dayEvents.slice(0, 2).map((ev, i) => (
-                      <div key={ev.id + i} style={{
-                        fontSize: 10, fontWeight: 500,
-                        padding: '2px 4px', borderRadius: 3, marginBottom: 2,
-                        background: `${TAG_COLORS[ev.tag] ?? 'var(--accent)'}22`,
-                        color: TAG_COLORS[ev.tag] ?? 'var(--accent)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
+                      <div key={ev.id + i}
+                        draggable={!ev.recurring}
+                        onDragStart={e => { e.stopPropagation(); setDragEventId(ev.id) }}
+                        onDragEnd={() => { dragEndedRef.current = true; setDragEventId(null); setDragOverDate(null) }}
+                        style={{
+                          fontSize: 10, fontWeight: 500,
+                          padding: '2px 4px', borderRadius: 3, marginBottom: 2,
+                          background: `${TAG_COLORS[ev.tag] ?? 'var(--accent)'}22`,
+                          color: TAG_COLORS[ev.tag] ?? 'var(--accent)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          cursor: ev.recurring ? 'default' : 'grab',
+                        }}>
                         {ev.recurring ? '🔁 ' : ''}{ev.time?.slice(0, 5) ?? ''} {ev.title}
                       </div>
                     ))}

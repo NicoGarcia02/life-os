@@ -148,6 +148,22 @@ export default function FinancesPage() {
     a.click()
   }
 
+  function exportAllCSV() {
+    const rows = [['Fecha', 'Descripción', 'Categoría', 'Tipo', 'Monto']]
+    transactions.forEach(tx => rows.push([
+      tx.date, tx.description,
+      tx.finance_categories?.name ?? 'Sin categoría',
+      tx.type === 'ingreso' ? 'Ingreso' : 'Gasto',
+      tx.amount.toFixed(2),
+    ]))
+    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n')
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+      download: `finanzas-completo.csv`,
+    })
+    a.click()
+  }
+
   // Category spending
   const catSpending: Record<string, number> = {}
   selTx.filter(t => t.type === 'gasto').forEach(t => {
@@ -168,7 +184,10 @@ export default function FinancesPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Finanzas</h1>
           <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 4 }}>Control de ingresos y gastos</p>
         </div>
-        <Btn variant="primary" onClick={openNewTx}>+ Agregar</Btn>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {transactions.length > 0 && <Btn variant="ghost" size="sm" onClick={exportAllCSV}>↓ Exportar todo</Btn>}
+          <Btn variant="primary" onClick={openNewTx}>+ Agregar</Btn>
+        </div>
       </div>
 
       <TabBar
@@ -286,15 +305,26 @@ export default function FinancesPage() {
                           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {catTxs.length === 0 ? (
                               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', paddingLeft: 8 }}>Sin movimientos este mes</div>
-                            ) : catTxs.map(tx => (
-                              <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)' }}>
-                                <div>
-                                  <div style={{ fontSize: 13, fontWeight: 500 }}>{tx.description}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{formatDate(tx.date)}</div>
+                            ) : (() => {
+                              const grouped = Object.values(
+                                catTxs.reduce((acc, tx) => {
+                                  const key = tx.description.toLowerCase().trim()
+                                  if (!acc[key]) acc[key] = { description: tx.description, total: 0, count: 0 }
+                                  acc[key].total += tx.amount
+                                  acc[key].count++
+                                  return acc
+                                }, {} as Record<string, { description: string; total: number; count: number }>)
+                              ).sort((a, b) => b.total - a.total)
+                              return grouped.map((g, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)' }}>
+                                  <div>
+                                    <div style={{ fontSize: 13, fontWeight: 500 }}>{g.description}</div>
+                                    {g.count > 1 && <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{g.count} veces</div>}
+                                  </div>
+                                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>-{formatCurrency(g.total)}</span>
                                 </div>
-                                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>-{formatCurrency(tx.amount)}</span>
-                              </div>
-                            ))}
+                              ))
+                            })()}
                           </div>
                         )}
                       </div>
@@ -329,15 +359,26 @@ export default function FinancesPage() {
                           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {catTxs.length === 0 ? (
                               <div style={{ fontSize: 12, color: 'var(--text-tertiary)', paddingLeft: 8 }}>Sin movimientos este mes</div>
-                            ) : catTxs.map(tx => (
-                              <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)' }}>
-                                <div>
-                                  <div style={{ fontSize: 13, fontWeight: 500 }}>{tx.description}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{formatDate(tx.date)}</div>
+                            ) : (() => {
+                              const grouped = Object.values(
+                                catTxs.reduce((acc, tx) => {
+                                  const key = tx.description.toLowerCase().trim()
+                                  if (!acc[key]) acc[key] = { description: tx.description, total: 0, count: 0 }
+                                  acc[key].total += tx.amount
+                                  acc[key].count++
+                                  return acc
+                                }, {} as Record<string, { description: string; total: number; count: number }>)
+                              ).sort((a, b) => b.total - a.total)
+                              return grouped.map((g, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'var(--bg-root)', borderRadius: 'var(--radius-sm)' }}>
+                                  <div>
+                                    <div style={{ fontSize: 13, fontWeight: 500 }}>{g.description}</div>
+                                    {g.count > 1 && <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{g.count} veces</div>}
+                                  </div>
+                                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--green)' }}>+{formatCurrency(g.total)}</span>
                                 </div>
-                                <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--green)' }}>+{formatCurrency(tx.amount)}</span>
-                              </div>
-                            ))}
+                              ))
+                            })()}
                           </div>
                         )}
                       </div>
