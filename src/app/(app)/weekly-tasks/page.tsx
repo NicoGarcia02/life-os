@@ -40,6 +40,8 @@ export default function WeeklyTasksPage() {
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [form, setForm] = useState({ title: '', description: '', priority: 'media' as Task['priority'], due_date: '' })
   const [saving, setSaving] = useState(false)
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null)
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null)
 
   const { start: weekStart, end: weekEnd } = getWeekRange(weekOffset)
   const weekDays = getDaysInRange(weekStart, weekEnd)
@@ -67,6 +69,16 @@ export default function WeeklyTasksPage() {
     }
     setModalOpen(false)
     setSaving(false)
+  }
+
+  async function handleDrop(newDate: string) {
+    if (!dragTaskId) return
+    const task = tasks.find(t => t.id === dragTaskId)
+    if (task && task.due_date !== newDate) {
+      await updateTask(dragTaskId, { due_date: newDate })
+    }
+    setDragTaskId(null)
+    setDragOverDay(null)
   }
 
   const weekTasksMap = weekDays.reduce<Record<string, Task[]>>((acc, day) => {
@@ -102,11 +114,17 @@ export default function WeeklyTasksPage() {
           const done = dayTasks.filter(t => t.completed)
 
           return (
-            <div key={day} className="card" style={{
-              padding: '16px 18px',
-              border: isToday ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
-              opacity: isPast && !isToday ? 0.75 : 1,
-            }}>
+            <div key={day} className="card"
+              onDragOver={e => { e.preventDefault(); setDragOverDay(day) }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverDay(null) }}
+              onDrop={async e => { e.preventDefault(); await handleDrop(day) }}
+              style={{
+                padding: '16px 18px',
+                border: dragOverDay === day && dragTaskId ? '1px solid var(--accent)' : isToday ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
+                background: dragOverDay === day && dragTaskId ? 'rgba(124,154,255,0.06)' : undefined,
+                opacity: isPast && !isToday ? 0.75 : 1,
+                transition: 'border-color 0.1s, background 0.1s',
+              }}>
               {/* Cabecera del día */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: dayTasks.length > 0 ? 12 : 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -152,7 +170,7 @@ export default function WeeklyTasksPage() {
               {pending.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: done.length > 0 ? 8 : 0 }}>
                   {pending.map(task => (
-                    <TaskItem key={task.id} task={task} onToggle={() => toggleTask(task.id, true)} onEdit={() => openEdit(task)} onDelete={() => deleteTask(task.id)} />
+                    <TaskItem key={task.id} task={task} onToggle={() => toggleTask(task.id, true)} onEdit={() => openEdit(task)} onDelete={() => deleteTask(task.id)} isDragging={dragTaskId === task.id} onDragStart={() => setDragTaskId(task.id)} onDragEnd={() => { setDragTaskId(null); setDragOverDay(null) }} />
                   ))}
                 </div>
               )}
@@ -161,7 +179,7 @@ export default function WeeklyTasksPage() {
               {done.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {done.map(task => (
-                    <TaskItem key={task.id} task={task} onToggle={() => toggleTask(task.id, false)} onEdit={() => openEdit(task)} onDelete={() => deleteTask(task.id)} />
+                    <TaskItem key={task.id} task={task} onToggle={() => toggleTask(task.id, false)} onEdit={() => openEdit(task)} onDelete={() => deleteTask(task.id)} isDragging={dragTaskId === task.id} onDragStart={() => setDragTaskId(task.id)} onDragEnd={() => { setDragTaskId(null); setDragOverDay(null) }} />
                   ))}
                 </div>
               )}
@@ -200,20 +218,28 @@ export default function WeeklyTasksPage() {
   )
 }
 
-function TaskItem({ task, onToggle, onEdit, onDelete }: {
+function TaskItem({ task, onToggle, onEdit, onDelete, onDragStart, onDragEnd, isDragging }: {
   task: Task
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
+  onDragStart?: () => void
+  onDragEnd?: () => void
+  isDragging?: boolean
 }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '8px 10px',
-      borderRadius: 'var(--radius-sm)',
-      background: 'var(--bg-active)',
-      opacity: task.completed ? 0.55 : 1,
-    }}>
+    <div
+      draggable
+      onDragStart={e => { e.stopPropagation(); onDragStart?.() }}
+      onDragEnd={onDragEnd}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 10px',
+        borderRadius: 'var(--radius-sm)',
+        background: 'var(--bg-active)',
+        opacity: isDragging ? 0.4 : task.completed ? 0.55 : 1,
+        cursor: 'grab',
+      }}>
       <div
         className={`habit-check ${task.completed ? 'checked' : ''}`}
         onClick={onToggle}

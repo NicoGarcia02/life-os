@@ -308,7 +308,7 @@ export default function FinancesPage() {
                             ) : (() => {
                               const grouped = Object.values(
                                 catTxs.reduce((acc, tx) => {
-                                  const key = tx.description.toLowerCase().trim()
+                                  const key = tx.description.toLowerCase().trim().normalize('NFD').split('').filter(c => c.charCodeAt(0) < 0x0300 || c.charCodeAt(0) > 0x036f).join('')
                                   if (!acc[key]) acc[key] = { description: tx.description, total: 0, count: 0 }
                                   acc[key].total += tx.amount
                                   acc[key].count++
@@ -362,7 +362,7 @@ export default function FinancesPage() {
                             ) : (() => {
                               const grouped = Object.values(
                                 catTxs.reduce((acc, tx) => {
-                                  const key = tx.description.toLowerCase().trim()
+                                  const key = tx.description.toLowerCase().trim().normalize('NFD').split('').filter(c => c.charCodeAt(0) < 0x0300 || c.charCodeAt(0) > 0x036f).join('')
                                   if (!acc[key]) acc[key] = { description: tx.description, total: 0, count: 0 }
                                   acc[key].total += tx.amount
                                   acc[key].count++
