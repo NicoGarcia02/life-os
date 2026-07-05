@@ -348,7 +348,7 @@ export default function FinancesPage() {
                   {categories.filter(c => c.type === 'ingreso').map(cat => {
                     const received = catIncome[cat.id] ?? 0
                     const isExpanded = expandedCat === cat.id
-                    const catTxs = monthTx.filter(t => t.type === 'ingreso' && t.category_id === cat.id)
+                    const catTxs = selTx.filter(t => t.type === 'ingreso' && t.category_id === cat.id)
                     return (
                       <div key={cat.id}>
                         <div
