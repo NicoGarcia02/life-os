@@ -115,6 +115,9 @@ export default function FinancesPage() {
   const selIncome = selTx.filter(t => t.type === 'ingreso').reduce((s, t) => s + t.amount, 0)
   const selExpense = selTx.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0)
   const selBalance = selIncome - selExpense
+  const cumulativeBalance = transactions
+    .filter(t => (t.date?.substring(0, 7) ?? '') <= selectedMonth)
+    .reduce((s, t) => t.type === 'ingreso' ? s + t.amount : s - t.amount, 0)
 
   // Previous month for insights
   const prevMonthStr = (() => {
@@ -211,12 +214,15 @@ export default function FinancesPage() {
               <StatCard label="Gastos" value={formatCurrency(selExpense)} trendDown={selExpense > 0} />
             </div>
 
-            {/* Balance anual */}
-            <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
-              Saldo acumulado {yearStr}:
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, marginLeft: 6, color: yearBalance >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {yearBalance >= 0 ? '+' : ''}{formatCurrency(yearBalance)}
-              </span>
+            <div style={{ marginBottom: 12 }}>
+              <StatCard
+                label="Saldo disponible"
+                value={(cumulativeBalance >= 0 ? '+' : '') + formatCurrency(cumulativeBalance)}
+                trendUp={cumulativeBalance > 0}
+                trendDown={cumulativeBalance < 0}
+                trend={`Acumulado hasta ${monthLabel}`}
+                highlight={cumulativeBalance > 0 ? 'green' : cumulativeBalance < 0 ? 'red' : undefined}
+              />
             </div>
 
             {/* Insights */}
