@@ -153,3 +153,13 @@ export interface ProjectMilestone {
   achieved: boolean
   created_at: string
 }
+
+export interface ScheduleEntry {
+  id: string
+  user_id: string
+  date: string
+  time: string
+  title: string
+  duration: number
+  created_at: string
+}

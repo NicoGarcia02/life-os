@@ -4,10 +4,45 @@ import { createClient } from '@/lib/supabase'
 import SectionHeader from '@/components/ui/SectionHeader'
 import ProgressBar from '@/components/ui/ProgressBar'
 import ScoreRing from '@/components/ui/ScoreRing'
-import { getWeekRange, getDaysInRange, formatDate, formatCurrency, calcDailyScore, scoreColor, entryHours } from '@/lib/utils'
-import type { Habit, HabitEntry, SleepEntry, Task, Transaction, DailyClosing } from '@/lib/types'
+import {
+  getWeekRange, getDaysInRange, formatDate, formatCurrency,
+  calcDailyScore, scoreColor, entryHours, today, TAG_COLORS,
+} from '@/lib/utils'
+import type { Habit, HabitEntry, SleepEntry, Task, Transaction, DailyClosing, CalendarEvent, ScheduleEntry } from '@/lib/types'
+import { useSchedule } from '@/hooks/useSchedule'
 
 const RATING_EMOJIS: Record<number, string> = { 1: '😫', 2: '😕', 3: '😐', 4: '🙂', 5: '🤩' }
+const HOURS = Array.from({ length: 18 }, (_, i) => i + 6) // 06:00 → 23:00
+
+// Helpers para expandir eventos recurrentes del calendario
+function dateToStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function advanceDate(d: Date, interval: number, unit: 'day' | 'week' | 'month') {
+  if (unit === 'day') d.setDate(d.getDate() + interval)
+  else if (unit === 'week') d.setDate(d.getDate() + interval * 7)
+  else if (unit === 'month') d.setMonth(d.getMonth() + interval)
+}
+function expandRecurring(events: CalendarEvent[], rangeStart: string, rangeEnd: string): CalendarEvent[] {
+  const result: CalendarEvent[] = []
+  const startD = new Date(rangeStart + 'T00:00:00')
+  const endD = new Date(rangeEnd + 'T00:00:00')
+  for (const ev of events) {
+    if (!ev.recurring || !ev.recurrence_unit) { result.push(ev); continue }
+    const interval = ev.recurrence_interval ?? 1
+    const current = new Date(ev.date + 'T00:00:00')
+    let safety = 500
+    while (current < startD && safety-- > 0) advanceDate(current, interval, ev.recurrence_unit)
+    while (current <= endD && safety-- > 0) {
+      result.push({ ...ev, date: dateToStr(current) })
+      advanceDate(current, interval, ev.recurrence_unit)
+    }
+  }
+  return result.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date)
+    return (a.time ?? '').localeCompare(b.time ?? '')
+  })
+}
 
 function WeekNav({ offset, onChange }: { offset: number; onChange: (o: number) => void }) {
   const { start, end } = getWeekRange(offset)
@@ -39,10 +74,181 @@ function BarChart({ data, max = 100, color = 'var(--accent)', labels }: { data: 
   )
 }
 
+function DaySchedulePanel({
+  day,
+  calendarEvents,
+  scheduleEntries,
+  onAdd,
+  onDelete,
+}: {
+  day: string
+  calendarEvents: CalendarEvent[]
+  scheduleEntries: ScheduleEntry[]
+  onAdd: (time: string, title: string) => Promise<void>
+  onDelete: (id: string) => void
+}) {
+  const [addingHour, setAddingHour] = useState<number | null>(null)
+  const [addTitle, setAddTitle] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleAdd(hour: number) {
+    if (!addTitle.trim()) return
+    setSaving(true)
+    await onAdd(`${String(hour).padStart(2, '0')}:00`, addTitle.trim())
+    setAddTitle('')
+    setAddingHour(null)
+    setSaving(false)
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 16, padding: 20 }}>
+      {/* Panel header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600, textTransform: 'capitalize' }}>
+            {formatDate(day, { weekday: 'long', day: 'numeric', month: 'long' })}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Planificación hora a hora</div>
+        </div>
+        <div style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--text-tertiary)', alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--accent)', display: 'inline-block' }} />
+            Mis actividades
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--green)', display: 'inline-block' }} />
+            Del calendario
+          </span>
+        </div>
+      </div>
+
+      {/* Hourly grid */}
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {HOURS.map(hour => {
+          const timePrefix = `${String(hour).padStart(2, '0')}:`
+          const calEventsThisHour = calendarEvents.filter(ev => ev.time?.startsWith(timePrefix))
+          const schedEntriesThisHour = scheduleEntries.filter(e => e.time?.startsWith(timePrefix))
+          const isAdding = addingHour === hour
+
+          return (
+            <div key={hour} style={{ display: 'flex' }}>
+              {/* Hour label */}
+              <div style={{
+                width: 52, flexShrink: 0,
+                fontFamily: 'var(--font-mono)', fontSize: 11,
+                color: 'var(--text-tertiary)', paddingTop: 10,
+                textAlign: 'right', paddingRight: 14,
+              }}>
+                {String(hour).padStart(2, '0')}:00
+              </div>
+
+              {/* Content column */}
+              <div style={{
+                flex: 1,
+                borderTop: '1px solid var(--border-subtle)',
+                paddingTop: 6, paddingBottom: 6, paddingLeft: 4,
+                minHeight: 36,
+              }}>
+                {/* Calendar events — read only */}
+                {calEventsThisHour.map((ev, i) => (
+                  <div key={ev.id + i} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    marginBottom: 4, padding: '5px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: `${TAG_COLORS[ev.tag] ?? 'var(--green)'}18`,
+                    border: `1px solid ${TAG_COLORS[ev.tag] ?? 'var(--green)'}33`,
+                  }}>
+                    <div style={{ width: 3, height: 14, borderRadius: 2, background: TAG_COLORS[ev.tag] ?? 'var(--green)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: 'var(--text-primary)' }}>{ev.title}</span>
+                    {ev.time && <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{ev.time.slice(0, 5)}</span>}
+                    {ev.duration && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.duration}min</span>}
+                    <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: `${TAG_COLORS[ev.tag] ?? 'var(--green)'}22`, color: TAG_COLORS[ev.tag] ?? 'var(--green)' }}>{ev.tag}</span>
+                  </div>
+                ))}
+
+                {/* Schedule entries */}
+                {schedEntriesThisHour.map(entry => (
+                  <div key={entry.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    marginBottom: 4, padding: '5px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--accent-muted)',
+                    border: '1px solid rgba(124,154,255,0.2)',
+                  }}>
+                    <div style={{ width: 3, height: 14, borderRadius: 2, background: 'var(--accent)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, flex: 1, color: 'var(--text-primary)' }}>{entry.title}</span>
+                    {entry.duration && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{entry.duration}min</span>}
+                    <button
+                      onClick={() => onDelete(entry.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 13, padding: '0 2px', lineHeight: 1 }}
+                    >✕</button>
+                  </div>
+                ))}
+
+                {/* Inline add form or add button */}
+                {isAdding ? (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                    <input
+                      autoFocus
+                      value={addTitle}
+                      onChange={e => setAddTitle(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleAdd(hour)
+                        if (e.key === 'Escape') { setAddingHour(null); setAddTitle('') }
+                      }}
+                      placeholder="Nueva actividad..."
+                      style={{
+                        flex: 1, background: 'var(--bg-root)',
+                        border: '1px solid var(--accent)',
+                        borderRadius: 'var(--radius-sm)', padding: '5px 10px',
+                        color: 'var(--text-primary)', fontSize: 13,
+                        outline: 'none', fontFamily: 'inherit',
+                      }}
+                    />
+                    <button
+                      onClick={() => handleAdd(hour)}
+                      disabled={saving || !addTitle.trim()}
+                      style={{
+                        background: 'var(--accent)', border: 'none',
+                        borderRadius: 'var(--radius-sm)', color: '#fff',
+                        fontSize: 13, fontWeight: 600, padding: '5px 12px',
+                        cursor: saving ? 'not-allowed' : 'pointer',
+                        opacity: saving || !addTitle.trim() ? 0.5 : 1,
+                      }}
+                    >✓</button>
+                    <button
+                      onClick={() => { setAddingHour(null); setAddTitle('') }}
+                      style={{
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
+                        borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)',
+                        fontSize: 12, padding: '5px 10px', cursor: 'pointer',
+                      }}
+                    >✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setAddingHour(hour); setAddTitle('') }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--text-tertiary)', fontSize: 11,
+                      padding: '1px 0', display: 'flex', alignItems: 'center', gap: 3,
+                    }}
+                  >+ agregar</button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function WeeklyPage() {
   const supabase = createClient()
   const [weekOffset, setWeekOffset] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
   const [habits, setHabits] = useState<Habit[]>([])
   const [entries, setEntries] = useState<HabitEntry[]>([])
@@ -50,23 +256,29 @@ export default function WeeklyPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [closings, setClosings] = useState<DailyClosing[]>([])
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
+
+  const { entries: scheduleEntries, fetchEntries, addEntry, deleteEntry } = useSchedule()
 
   const { start: weekStart, end: weekEnd } = getWeekRange(weekOffset)
   const weekDays = getDaysInRange(weekStart, weekEnd)
   const dayLabels = weekDays.map(d => formatDate(d, { weekday: 'short' }))
+  const todayStr = today()
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [habitsRes, entriesRes, sleepRes, tasksRes, txRes, closingsRes] = await Promise.all([
+    const [habitsRes, entriesRes, sleepRes, tasksRes, txRes, closingsRes, nonRecurringRes, recurringRes] = await Promise.all([
       supabase.from('habits').select('*').eq('user_id', user.id).eq('active', true),
       supabase.from('habit_entries').select('*').eq('user_id', user.id).gte('date', weekStart).lte('date', weekEnd),
       supabase.from('sleep_entries').select('*').eq('user_id', user.id).gte('date', weekStart).lte('date', weekEnd),
       supabase.from('tasks').select('*').eq('user_id', user.id),
       supabase.from('transactions').select('*, finance_categories(name, icon)').eq('user_id', user.id).gte('date', weekStart).lte('date', weekEnd),
       supabase.from('daily_closings').select('*').eq('user_id', user.id).gte('date', weekStart).lte('date', weekEnd).order('date'),
+      supabase.from('events').select('*').eq('user_id', user.id).eq('recurring', false).gte('date', weekStart).lte('date', weekEnd),
+      supabase.from('events').select('*').eq('user_id', user.id).eq('recurring', true).lte('date', weekEnd),
     ])
 
     setHabits(habitsRes.data ?? [])
@@ -75,6 +287,8 @@ export default function WeeklyPage() {
     setTasks(tasksRes.data ?? [])
     setTransactions(txRes.data ?? [])
     setClosings(closingsRes.data ?? [])
+    const allEvents = [...(nonRecurringRes.data ?? []), ...(recurringRes.data ?? [])]
+    setCalendarEvents(expandRecurring(allEvents, weekStart, weekEnd))
     setLoading(false)
   }, [weekStart, weekEnd])
 
@@ -84,8 +298,10 @@ export default function WeeklyPage() {
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [fetchAll])
+  useEffect(() => { setSelectedDay(null) }, [weekOffset])
+  useEffect(() => { if (selectedDay) fetchEntries(selectedDay) }, [selectedDay, fetchEntries])
 
-  // Scores per day
+  // Scores por día
   const dayScores = weekDays.map(day => {
     const dayEntries = entries.filter(e => e.date === day && e.completed)
     const sleep = sleepEntries.find(s => s.date === day)
@@ -100,13 +316,13 @@ export default function WeeklyPage() {
   })
   const avgScore = dayScores.length ? Math.round(dayScores.reduce((s, v) => s + v, 0) / dayScores.length) : 0
 
-  // Habits
+  // Hábitos
   const habitsMet = habits.filter(h => {
     const count = entries.filter(e => e.habit_id === h.id && e.completed).length
     return count >= h.weekly_goal
   }).length
 
-  // Sleep
+  // Sueño
   const avgSleepHours = sleepEntries.length
     ? Math.round((sleepEntries.reduce((s, e) => s + entryHours(e), 0) / sleepEntries.length) * 10) / 10
     : 0
@@ -116,11 +332,11 @@ export default function WeeklyPage() {
   const bestNight = sleepEntries.reduce((best, e) => (!best || entryHours(e) > entryHours(best)) ? e : best, null as SleepEntry | null)
   const worstNight = sleepEntries.reduce((worst, e) => (!worst || entryHours(e) < entryHours(worst)) ? e : worst, null as SleepEntry | null)
 
-  // Tasks
+  // Tareas
   const weekTasks = tasks.filter(t => t.due_date && t.due_date >= weekStart && t.due_date <= weekEnd)
   const weekTasksCompleted = weekTasks.filter(t => t.completed).length
 
-  // Finances
+  // Finanzas
   const weekExpense = transactions.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0)
   const topCat = (() => {
     const catMap: Record<string, { name: string; icon: string; total: number }> = {}
@@ -133,7 +349,7 @@ export default function WeeklyPage() {
     return Object.values(catMap).sort((a, b) => b.total - a.total)[0] ?? null
   })()
 
-  // Patterns
+  // Patrones
   const goodSleepDays = weekDays.filter(day => {
     const sleep = sleepEntries.find(s => s.date === day)
     return sleep && entryHours(sleep) >= 7
@@ -149,7 +365,6 @@ export default function WeeklyPage() {
   const bestDayIndex = dayScores.indexOf(bestDayScore)
   const bestDay = weekDays[bestDayIndex]
 
-  // Poor sleep habit completion (for comparison)
   const poorSleepDays = weekDays.filter(day => {
     const s = sleepEntries.find(e => e.date === day)
     return s && entryHours(s) < 7
@@ -161,7 +376,6 @@ export default function WeeklyPage() {
       }, 0) / poorSleepDays.length)
     : null
 
-  // Score trend (Mon-Wed vs Thu-Sun)
   const validScores = dayScores.filter(s => s > 0)
   const firstHalf = dayScores.slice(0, 3).filter(s => s > 0)
   const secondHalf = dayScores.slice(3).filter(s => s > 0)
@@ -169,7 +383,6 @@ export default function WeeklyPage() {
   const secondAvg = secondHalf.length ? secondHalf.reduce((a, b) => a + b) / secondHalf.length : 0
   const scoreTrend = firstHalf.length > 0 && secondHalf.length > 0 ? Math.round(secondAvg - firstAvg) : null
 
-  // Mood vs performance
   const goodScoreDayRatings = weekDays
     .map((d, i) => ({ score: dayScores[i], rating: closings.find(c => c.date === d)?.day_rating }))
     .filter(x => x.score >= 70 && x.rating)
@@ -180,12 +393,39 @@ export default function WeeklyPage() {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto' }} className="animate-fade">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>Resumen semanal</h1>
           <p style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 4 }}>Una mirada a tu semana</p>
         </div>
         <WeekNav offset={weekOffset} onChange={setWeekOffset} />
+      </div>
+
+      {/* Selector de días */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 28, flexWrap: 'wrap' }}>
+        {weekDays.map((day, i) => {
+          const isSelected = selectedDay === day
+          const isToday = day === todayStr
+          return (
+            <button
+              key={day}
+              onClick={() => setSelectedDay(isSelected ? null : day)}
+              style={{
+                padding: '6px 14px', borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${isSelected ? 'var(--accent)' : isToday ? 'var(--accent)' : 'var(--border-default)'}`,
+                background: isSelected ? 'var(--accent-muted)' : 'var(--bg-elevated)',
+                color: isSelected ? 'var(--accent)' : isToday ? 'var(--accent)' : 'var(--text-secondary)',
+                fontSize: 13, fontWeight: isSelected || isToday ? 600 : 400,
+                cursor: 'pointer', transition: 'all 0.15s',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <span style={{ textTransform: 'capitalize' }}>{dayLabels[i]}</span>
+              <span style={{ fontSize: 11, opacity: 0.65 }}>{formatDate(day, { day: 'numeric' })}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Score */}
@@ -217,12 +457,8 @@ export default function WeeklyPage() {
                 return (
                   <div key={h.id}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {h.emoji} {h.name}
-                      </span>
-                      <span style={{ fontSize: 12, color: met ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
-                        {met ? '✓' : '✗'} {count}/{h.weekly_goal}
-                      </span>
+                      <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>{h.emoji} {h.name}</span>
+                      <span style={{ fontSize: 12, color: met ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>{met ? '✓' : '✗'} {count}/{h.weekly_goal}</span>
                     </div>
                     <ProgressBar value={count} total={h.weekly_goal} height={4} color={met ? 'var(--green)' : 'var(--red)'} />
                   </div>
@@ -245,12 +481,8 @@ export default function WeeklyPage() {
               <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{avgSleepQuality}/5</div>
             </div>
           </div>
-          {bestNight && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
-            🌟 Mejor noche: {entryHours(bestNight)}h el {formatDate(bestNight.date, { weekday: 'short', day: 'numeric' })}
-          </div>}
-          {worstNight && bestNight !== worstNight && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
-            😓 Peor noche: {entryHours(worstNight)}h el {formatDate(worstNight.date, { weekday: 'short', day: 'numeric' })}
-          </div>}
+          {bestNight && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>🌟 Mejor noche: {entryHours(bestNight)}h el {formatDate(bestNight.date, { weekday: 'short', day: 'numeric' })}</div>}
+          {worstNight && bestNight !== worstNight && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>😓 Peor noche: {entryHours(worstNight)}h el {formatDate(worstNight.date, { weekday: 'short', day: 'numeric' })}</div>}
           {sleepEntries.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Sin registros esta semana</div>}
         </div>
 
@@ -283,11 +515,7 @@ export default function WeeklyPage() {
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Gasto de la semana</div>
             <div style={{ fontSize: 24, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{formatCurrency(weekExpense)}</div>
           </div>
-          {topCat && (
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              Categoría líder: {topCat.icon} {topCat.name} — {formatCurrency(topCat.total)}
-            </div>
-          )}
+          {topCat && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Categoría líder: {topCat.icon} {topCat.name} — {formatCurrency(topCat.total)}</div>}
           {transactions.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Sin movimientos esta semana</div>}
         </div>
       </div>
@@ -359,6 +587,18 @@ export default function WeeklyPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Panel horario del día seleccionado */}
+      {selectedDay && (
+        <DaySchedulePanel
+          key={selectedDay}
+          day={selectedDay}
+          calendarEvents={calendarEvents.filter(ev => ev.date === selectedDay)}
+          scheduleEntries={scheduleEntries}
+          onAdd={async (time, title) => { await addEntry({ date: selectedDay, time, title }) }}
+          onDelete={id => deleteEntry(id)}
+        />
       )}
     </div>
   )
