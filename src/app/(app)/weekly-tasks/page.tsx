@@ -1,11 +1,13 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/lib/supabase'
 import Modal from '@/components/ui/Modal'
 import Btn from '@/components/ui/Btn'
 import { Input, Textarea, SelectInput } from '@/components/ui/Input'
 import { useTasks } from '@/hooks/useTasks'
-import { today, formatDate, getWeekRange, getDaysInRange } from '@/lib/utils'
-import type { Task } from '@/lib/types'
+import { useSchedule } from '@/hooks/useSchedule'
+import { today, formatDate, getWeekRange, getDaysInRange, TAG_COLORS } from '@/lib/utils'
+import type { Task, CalendarEvent, ScheduleEntry } from '@/lib/types'
 
 const PRIORITY_COLOR: Record<string, string> = {
   alta: 'var(--red)',
@@ -16,6 +18,51 @@ const PRIORITY_BG: Record<string, string> = {
   alta: 'var(--red-muted)',
   media: 'var(--yellow-muted)',
   baja: 'var(--green-muted)',
+}
+
+const SCHEDULE_CATEGORIES = ['Personal', 'Trabajo', 'Estudio', 'Salud', 'Ejercicio', 'Descanso']
+const CATEGORY_COLORS: Record<string, string> = {
+  Personal: 'var(--accent)',
+  Trabajo: '#7c9aff',
+  Estudio: '#c084fc',
+  Salud: '#f87171',
+  Ejercicio: '#4ade80',
+  Descanso: '#fbbf24',
+}
+const HOURS = Array.from({ length: 18 }, (_, i) => i + 6) // 06:00 → 23:00
+
+function dateToStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function advanceDate(d: Date, interval: number, unit: 'day' | 'week' | 'month') {
+  if (unit === 'day') d.setDate(d.getDate() + interval)
+  else if (unit === 'week') d.setDate(d.getDate() + interval * 7)
+  else if (unit === 'month') d.setMonth(d.getMonth() + interval)
+}
+function expandRecurring(events: CalendarEvent[], rangeStart: string, rangeEnd: string): CalendarEvent[] {
+  const result: CalendarEvent[] = []
+  const startD = new Date(rangeStart + 'T00:00:00')
+  const endD = new Date(rangeEnd + 'T00:00:00')
+  for (const ev of events) {
+    if (!ev.recurring || !ev.recurrence_unit) { result.push(ev); continue }
+    const interval = ev.recurrence_interval ?? 1
+    const current = new Date(ev.date + 'T00:00:00')
+    let safety = 500
+    while (current < startD && safety-- > 0) advanceDate(current, interval, ev.recurrence_unit)
+    while (current <= endD && safety-- > 0) {
+      result.push({ ...ev, date: dateToStr(current) })
+      advanceDate(current, interval, ev.recurrence_unit)
+    }
+  }
+  return result.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date)
+    return (a.time ?? '').localeCompare(b.time ?? '')
+  })
+}
+function calcEndTime(time: string, duration: number): string {
+  const [h, m] = time.split(':').map(Number)
+  const total = h * 60 + m + duration
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
 function WeekNav({ offset, onChange }: { offset: number; onChange: (o: number) => void }) {
@@ -33,8 +80,273 @@ function WeekNav({ offset, onChange }: { offset: number; onChange: (o: number) =
   )
 }
 
+// ── Day Schedule Modal Content ───────────────────────────────────────────────
+function DayScheduleContent({
+  calendarEvents,
+  scheduleEntries,
+  onAdd,
+  onUpdate,
+  onDelete,
+}: {
+  calendarEvents: CalendarEvent[]
+  scheduleEntries: ScheduleEntry[]
+  onAdd: (time: string, title: string, duration: number, category: string) => Promise<void>
+  onUpdate: (id: string, updates: Partial<Pick<ScheduleEntry, 'title' | 'duration' | 'category' | 'completed'>>) => Promise<string | null>
+  onDelete: (id: string) => void
+}) {
+  const [addingHour, setAddingHour] = useState<number | null>(null)
+  const [addForm, setAddForm] = useState({ title: '', duration: '60', category: 'Personal' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ title: '', duration: '', category: '' })
+  const [saving, setSaving] = useState(false)
+
+  async function handleAdd(hour: number) {
+    if (!addForm.title.trim()) return
+    setSaving(true)
+    await onAdd(
+      `${String(hour).padStart(2, '0')}:00`,
+      addForm.title.trim(),
+      parseInt(addForm.duration) || 60,
+      addForm.category,
+    )
+    setAddForm({ title: '', duration: '60', category: 'Personal' })
+    setAddingHour(null)
+    setSaving(false)
+  }
+
+  function startEdit(entry: ScheduleEntry) {
+    setEditingId(entry.id)
+    setEditForm({ title: entry.title, duration: String(entry.duration), category: entry.category })
+  }
+
+  async function handleUpdate() {
+    if (!editingId || !editForm.title.trim()) return
+    setSaving(true)
+    await onUpdate(editingId, {
+      title: editForm.title.trim(),
+      duration: parseInt(editForm.duration) || 60,
+      category: editForm.category,
+    })
+    setEditingId(null)
+    setSaving(false)
+  }
+
+  return (
+    <div>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 16, alignItems: 'center' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--accent)', display: 'inline-block' }} />
+          Mis actividades
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--green)', display: 'inline-block' }} />
+          Del calendario
+        </span>
+      </div>
+
+      {/* Hourly grid */}
+      {HOURS.map(hour => {
+        const timePrefix = `${String(hour).padStart(2, '0')}:`
+        const calEventsThisHour = calendarEvents.filter(ev => ev.time?.startsWith(timePrefix))
+        const schedEntriesThisHour = scheduleEntries.filter(e => e.time?.startsWith(timePrefix))
+        const isAdding = addingHour === hour
+
+        return (
+          <div key={hour} style={{ display: 'flex' }}>
+            {/* Hour label */}
+            <div style={{
+              width: 52, flexShrink: 0,
+              fontFamily: 'var(--font-mono)', fontSize: 11,
+              color: 'var(--text-tertiary)', paddingTop: 10,
+              textAlign: 'right', paddingRight: 14,
+            }}>
+              {String(hour).padStart(2, '0')}:00
+            </div>
+
+            {/* Content column */}
+            <div style={{
+              flex: 1, borderTop: '1px solid var(--border-subtle)',
+              paddingTop: 6, paddingBottom: 6, paddingLeft: 4, minHeight: 36,
+            }}>
+              {/* Calendar events — read only */}
+              {calEventsThisHour.map((ev, i) => (
+                <div key={ev.id + i} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  marginBottom: 4, padding: '6px 10px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: `${TAG_COLORS[ev.tag] ?? 'var(--green)'}18`,
+                  border: `1px solid ${TAG_COLORS[ev.tag] ?? 'var(--green)'}33`,
+                }}>
+                  <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: TAG_COLORS[ev.tag] ?? 'var(--green)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{ev.title}</div>
+                    {ev.time && (
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                        {ev.time.slice(0, 5)}{ev.duration ? ` → ${calcEndTime(ev.time.slice(0, 5), ev.duration)} · ${ev.duration}min` : ''}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: `${TAG_COLORS[ev.tag] ?? 'var(--green)'}22`, color: TAG_COLORS[ev.tag] ?? 'var(--green)', flexShrink: 0 }}>{ev.tag}</span>
+                </div>
+              ))}
+
+              {/* Schedule entries */}
+              {schedEntriesThisHour.map(entry =>
+                editingId === entry.id ? (
+                  // Edit form inline
+                  <div key={entry.id} style={{
+                    marginBottom: 4, padding: '8px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--bg-active)',
+                    border: '1px solid var(--accent)',
+                  }}>
+                    <input
+                      autoFocus
+                      value={editForm.title}
+                      onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') handleUpdate(); if (e.key === 'Escape') setEditingId(null) }}
+                      style={{ width: '100%', background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '5px 8px', color: 'var(--text-primary)', fontSize: 13, outline: 'none', fontFamily: 'inherit', marginBottom: 6, boxSizing: 'border-box' }}
+                    />
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Duración</span>
+                        <input
+                          type="number"
+                          value={editForm.duration}
+                          onChange={e => setEditForm(p => ({ ...p, duration: e.target.value }))}
+                          min="5" max="480"
+                          style={{ width: 56, background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '4px 6px', color: 'var(--text-primary)', fontSize: 12, outline: 'none', textAlign: 'center' }}
+                        />
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>min</span>
+                      </div>
+                      <select
+                        value={editForm.category}
+                        onChange={e => setEditForm(p => ({ ...p, category: e.target.value }))}
+                        style={{ background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 12, padding: '4px 6px', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {SCHEDULE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                        <button
+                          onClick={handleUpdate}
+                          disabled={saving || !editForm.title.trim()}
+                          style={{ background: 'var(--accent)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#fff', fontSize: 12, fontWeight: 600, padding: '4px 10px', cursor: 'pointer', opacity: saving || !editForm.title.trim() ? 0.5 : 1 }}
+                        >✓</button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', fontSize: 12, padding: '4px 8px', cursor: 'pointer' }}
+                        >✕</button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Normal display
+                  <div key={entry.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    marginBottom: 4, padding: '6px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: entry.completed ? 'var(--bg-elevated)' : 'var(--accent-muted)',
+                    border: `1px solid ${entry.completed ? 'var(--border-subtle)' : 'rgba(124,154,255,0.2)'}`,
+                    opacity: entry.completed ? 0.6 : 1,
+                    transition: 'opacity 0.15s, background 0.15s',
+                  }}>
+                    {/* Checkbox */}
+                    <div
+                      onClick={() => onUpdate(entry.id, { completed: !entry.completed })}
+                      style={{
+                        width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                        border: `2px solid ${entry.completed ? 'var(--accent)' : 'var(--border-strong)'}`,
+                        background: entry.completed ? 'var(--accent)' : 'transparent',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      {entry.completed && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </div>
+                    {/* Color bar */}
+                    <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: CATEGORY_COLORS[entry.category] ?? 'var(--accent)', flexShrink: 0 }} />
+                    {/* Content */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', textDecoration: entry.completed ? 'line-through' : 'none' }}>
+                        {entry.title}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
+                        {entry.time.slice(0, 5)} → {calcEndTime(entry.time.slice(0, 5), entry.duration)} · {entry.duration}min
+                      </div>
+                    </div>
+                    {/* Category badge */}
+                    <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: `${CATEGORY_COLORS[entry.category] ?? 'var(--accent)'}22`, color: CATEGORY_COLORS[entry.category] ?? 'var(--accent)', flexShrink: 0 }}>
+                      {entry.category}
+                    </span>
+                    <button onClick={() => startEdit(entry)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 13, padding: '0 2px', flexShrink: 0 }}>✎</button>
+                    <button onClick={() => onDelete(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 13, padding: '0 2px', flexShrink: 0 }}>✕</button>
+                  </div>
+                )
+              )}
+
+              {/* Add form or button */}
+              {isAdding ? (
+                <div style={{ marginTop: 2 }}>
+                  <input
+                    autoFocus
+                    value={addForm.title}
+                    onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAdd(hour); if (e.key === 'Escape') setAddingHour(null) }}
+                    placeholder="Nueva actividad..."
+                    style={{ width: '100%', background: 'var(--bg-root)', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', padding: '5px 10px', color: 'var(--text-primary)', fontSize: 13, outline: 'none', fontFamily: 'inherit', marginBottom: 6, boxSizing: 'border-box' }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Duración</span>
+                      <input
+                        type="number"
+                        value={addForm.duration}
+                        onChange={e => setAddForm(p => ({ ...p, duration: e.target.value }))}
+                        min="5" max="480"
+                        style={{ width: 56, background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '4px 6px', color: 'var(--text-primary)', fontSize: 12, outline: 'none', textAlign: 'center' }}
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>min</span>
+                    </div>
+                    <select
+                      value={addForm.category}
+                      onChange={e => setAddForm(p => ({ ...p, category: e.target.value }))}
+                      style={{ background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 12, padding: '4px 6px', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      {SCHEDULE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                      <button
+                        onClick={() => handleAdd(hour)}
+                        disabled={saving || !addForm.title.trim()}
+                        style={{ background: 'var(--accent)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#fff', fontSize: 12, fontWeight: 600, padding: '4px 10px', cursor: 'pointer', opacity: saving || !addForm.title.trim() ? 0.5 : 1 }}
+                      >✓</button>
+                      <button
+                        onClick={() => setAddingHour(null)}
+                        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', fontSize: 12, padding: '4px 8px', cursor: 'pointer' }}
+                      >✕</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAddingHour(hour); setEditingId(null) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 11, padding: '1px 0', display: 'flex', alignItems: 'center', gap: 3 }}
+                >+ agregar</button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function WeeklyTasksPage() {
+  const supabase = createClient()
   const { tasks, loading, addTask, toggleTask, deleteTask, updateTask } = useTasks()
+  const { entries: scheduleEntries, fetchEntries, addEntry, updateEntry, deleteEntry } = useSchedule()
+
   const [weekOffset, setWeekOffset] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
@@ -43,9 +355,27 @@ export default function WeeklyTasksPage() {
   const [dragTaskId, setDragTaskId] = useState<string | null>(null)
   const [dragOverDay, setDragOverDay] = useState<string | null>(null)
 
+  const [scheduleDay, setScheduleDay] = useState<string | null>(null)
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
+
   const { start: weekStart, end: weekEnd } = getWeekRange(weekOffset)
   const weekDays = getDaysInRange(weekStart, weekEnd)
   const t = today()
+
+  const fetchCalendarEvents = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const [nonRec, rec] = await Promise.all([
+      supabase.from('events').select('*').eq('user_id', user.id).eq('recurring', false).gte('date', weekStart).lte('date', weekEnd),
+      supabase.from('events').select('*').eq('user_id', user.id).eq('recurring', true).lte('date', weekEnd),
+    ])
+    const all = [...(nonRec.data ?? []), ...(rec.data ?? [])]
+    setCalendarEvents(expandRecurring(all, weekStart, weekEnd))
+  }, [weekStart, weekEnd])
+
+  useEffect(() => { fetchCalendarEvents() }, [fetchCalendarEvents])
+  useEffect(() => { setScheduleDay(null) }, [weekOffset])
+  useEffect(() => { if (scheduleDay) fetchEntries(scheduleDay) }, [scheduleDay, fetchEntries])
 
   function openNew(date: string) {
     setEditTask(null)
@@ -125,14 +455,10 @@ export default function WeeklyTasksPage() {
                 opacity: isPast && !isToday ? 0.75 : 1,
                 transition: 'border-color 0.1s, background 0.1s',
               }}>
-              {/* Cabecera del día */}
+              {/* Day header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: dayTasks.length > 0 ? 12 : 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{
-                    fontSize: 13, fontWeight: 700,
-                    color: isToday ? 'var(--accent)' : 'var(--text-primary)',
-                    textTransform: 'capitalize',
-                  }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: isToday ? 'var(--accent)' : 'var(--text-primary)', textTransform: 'capitalize' }}>
                     {formatDate(day, { weekday: 'long' })}
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
@@ -144,29 +470,32 @@ export default function WeeklyTasksPage() {
                     </span>
                   )}
                   {dayTasks.length > 0 && (
-                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                      {done.length}/{dayTasks.length}
-                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{done.length}/{dayTasks.length}</span>
                   )}
                 </div>
-                <button
-                  onClick={() => openNew(day)}
-                  style={{
-                    width: 28, height: 28,
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border-default)',
-                    background: 'var(--bg-elevated)',
-                    color: 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    fontSize: 16,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    lineHeight: 1,
-                  }}
-                  title={`Nueva tarea para ${formatDate(day, { weekday: 'long' })}`}
-                >+</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={() => setScheduleDay(day)}
+                    style={{
+                      height: 28, padding: '0 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-default)',
+                      background: 'var(--bg-elevated)',
+                      color: 'var(--text-tertiary)',
+                      cursor: 'pointer', fontSize: 11,
+                      fontWeight: 500, letterSpacing: '0.02em',
+                    }}
+                    title="Ver horario del día"
+                  >Horario</button>
+                  <button
+                    onClick={() => openNew(day)}
+                    style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                    title={`Nueva tarea para ${formatDate(day, { weekday: 'long' })}`}
+                  >+</button>
+                </div>
               </div>
 
-              {/* Tareas pendientes */}
+              {/* Pending tasks */}
               {pending.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: done.length > 0 ? 8 : 0 }}>
                   {pending.map(task => (
@@ -175,7 +504,7 @@ export default function WeeklyTasksPage() {
                 </div>
               )}
 
-              {/* Tareas completadas */}
+              {/* Done tasks */}
               {done.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {done.map(task => (
@@ -184,11 +513,8 @@ export default function WeeklyTasksPage() {
                 </div>
               )}
 
-              {/* Vacío */}
               {dayTasks.length === 0 && (
-                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic', paddingTop: 2 }}>
-                  Sin tareas
-                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic', paddingTop: 2 }}>Sin tareas</div>
               )}
             </div>
           )
@@ -214,6 +540,27 @@ export default function WeeklyTasksPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal horario del día */}
+      <Modal
+        isOpen={scheduleDay !== null}
+        onClose={() => setScheduleDay(null)}
+        title={scheduleDay ? formatDate(scheduleDay, { weekday: 'long', day: 'numeric', month: 'long' }) : ''}
+        size="lg"
+      >
+        {scheduleDay && (
+          <DayScheduleContent
+            key={scheduleDay}
+            calendarEvents={calendarEvents.filter(ev => ev.date === scheduleDay)}
+            scheduleEntries={scheduleEntries}
+            onAdd={async (time, title, duration, category) => {
+              await addEntry({ date: scheduleDay, time, title, duration, category })
+            }}
+            onUpdate={updateEntry}
+            onDelete={deleteEntry}
+          />
+        )}
+      </Modal>
     </div>
   )
 }
@@ -234,8 +581,7 @@ function TaskItem({ task, onToggle, onEdit, onDelete, onDragStart, onDragEnd, is
       onDragEnd={onDragEnd}
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 10px',
-        borderRadius: 'var(--radius-sm)',
+        padding: '8px 10px', borderRadius: 'var(--radius-sm)',
         background: 'var(--bg-active)',
         opacity: isDragging ? 0.4 : task.completed ? 0.55 : 1,
         cursor: 'grab',
@@ -249,21 +595,12 @@ function TaskItem({ task, onToggle, onEdit, onDelete, onDragStart, onDragEnd, is
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{
-            fontSize: 13, fontWeight: 500,
-            textDecoration: task.completed ? 'line-through' : 'none',
-            color: task.completed ? 'var(--text-tertiary)' : 'var(--text-primary)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
+          <span style={{ fontSize: 13, fontWeight: 500, textDecoration: task.completed ? 'line-through' : 'none', color: task.completed ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {task.title}
           </span>
-          <span style={{
-            fontSize: 10, fontWeight: 600, padding: '1px 6px',
-            borderRadius: 4, flexShrink: 0,
-            background: PRIORITY_BG[task.priority],
-            color: PRIORITY_COLOR[task.priority],
-            textTransform: 'uppercase', letterSpacing: '0.05em',
-          }}>{task.priority}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, flexShrink: 0, background: PRIORITY_BG[task.priority], color: PRIORITY_COLOR[task.priority], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {task.priority}
+          </span>
         </div>
         {task.description && (
           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

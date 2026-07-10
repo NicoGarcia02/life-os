@@ -161,5 +161,7 @@ export interface ScheduleEntry {
   time: string
   title: string
   duration: number
+  category: string
+  completed: boolean
   created_at: string
 }
