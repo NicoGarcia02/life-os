@@ -95,28 +95,24 @@ function DayScheduleContent({
   onDelete: (id: string) => void
 }) {
   const [addingHour, setAddingHour] = useState<number | null>(null)
-  const [addForm, setAddForm] = useState({ title: '', duration: '60', category: 'Personal' })
+  const [addForm, setAddForm] = useState({ title: '', duration: '60', category: 'Personal', time: '' })
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ title: '', duration: '', category: '' })
+  const [editForm, setEditForm] = useState({ title: '', duration: '', category: '', time: '' })
   const [saving, setSaving] = useState(false)
 
   async function handleAdd(hour: number) {
     if (!addForm.title.trim()) return
     setSaving(true)
-    await onAdd(
-      `${String(hour).padStart(2, '0')}:00`,
-      addForm.title.trim(),
-      parseInt(addForm.duration) || 60,
-      addForm.category,
-    )
-    setAddForm({ title: '', duration: '60', category: 'Personal' })
+    const time = addForm.time || `${String(hour).padStart(2, '0')}:00`
+    await onAdd(time, addForm.title.trim(), parseInt(addForm.duration) || 60, addForm.category)
+    setAddForm({ title: '', duration: '60', category: 'Personal', time: '' })
     setAddingHour(null)
     setSaving(false)
   }
 
   function startEdit(entry: ScheduleEntry) {
     setEditingId(entry.id)
-    setEditForm({ title: entry.title, duration: String(entry.duration), category: entry.category })
+    setEditForm({ title: entry.title, duration: String(entry.duration), category: entry.category, time: entry.time.slice(0, 5) })
   }
 
   async function handleUpdate() {
@@ -126,6 +122,7 @@ function DayScheduleContent({
       title: editForm.title.trim(),
       duration: parseInt(editForm.duration) || 60,
       category: editForm.category,
+      time: editForm.time || undefined,
     })
     setEditingId(null)
     setSaving(false)
@@ -209,6 +206,15 @@ function DayScheduleContent({
                       style={{ width: '100%', background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '5px 8px', color: 'var(--text-primary)', fontSize: 13, outline: 'none', fontFamily: 'inherit', marginBottom: 6, boxSizing: 'border-box' }}
                     />
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Inicio</span>
+                        <input
+                          type="time"
+                          value={editForm.time}
+                          onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))}
+                          style={{ background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '4px 6px', color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'var(--font-mono)', colorScheme: 'dark' }}
+                        />
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Duración</span>
                         <input
@@ -298,6 +304,15 @@ function DayScheduleContent({
                   />
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Inicio</span>
+                      <input
+                        type="time"
+                        value={addForm.time}
+                        onChange={e => setAddForm(p => ({ ...p, time: e.target.value }))}
+                        style={{ background: 'var(--bg-root)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '4px 6px', color: 'var(--text-primary)', fontSize: 12, outline: 'none', fontFamily: 'var(--font-mono)', colorScheme: 'dark' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Duración</span>
                       <input
                         type="number"
@@ -330,7 +345,7 @@ function DayScheduleContent({
                 </div>
               ) : (
                 <button
-                  onClick={() => { setAddingHour(hour); setEditingId(null) }}
+                  onClick={() => { setAddingHour(hour); setEditingId(null); setAddForm(p => ({ ...p, title: '', time: `${String(hour).padStart(2, '0')}:00` })) }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 11, padding: '1px 0', display: 'flex', alignItems: 'center', gap: 3 }}
                 >+ agregar</button>
               )}

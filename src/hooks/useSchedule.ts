@@ -42,7 +42,7 @@ export function useSchedule() {
 
   const updateEntry = useCallback(async (
     id: string,
-    updates: Partial<Pick<ScheduleEntry, 'title' | 'duration' | 'category' | 'completed'>>
+    updates: Partial<Pick<ScheduleEntry, 'title' | 'duration' | 'category' | 'completed' | 'time'>>
   ): Promise<string | null> => {
     const { error } = await supabase.from('schedule_entries').update(updates).eq('id', id)
     if (error) return error.message
