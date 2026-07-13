@@ -91,7 +91,7 @@ function DayScheduleContent({
   calendarEvents: CalendarEvent[]
   scheduleEntries: ScheduleEntry[]
   onAdd: (time: string, title: string, duration: number, category: string) => Promise<void>
-  onUpdate: (id: string, updates: Partial<Pick<ScheduleEntry, 'title' | 'duration' | 'category' | 'completed'>>) => Promise<string | null>
+  onUpdate: (id: string, updates: Partial<Pick<ScheduleEntry, 'title' | 'duration' | 'category' | 'completed' | 'time'>>) => Promise<string | null>
   onDelete: (id: string) => void
 }) {
   const [addingHour, setAddingHour] = useState<number | null>(null)
@@ -357,6 +357,131 @@ function DayScheduleContent({
   )
 }
 
+// ── Week Grid Modal ──────────────────────────────────────────────────────────
+function WeekGridModal({
+  weekDays,
+  dayLabels,
+  calendarEvents,
+}: {
+  weekDays: string[]
+  dayLabels: string[]
+  calendarEvents: CalendarEvent[]
+}) {
+  const supabase = createClient()
+  const [weekEntries, setWeekEntries] = useState<ScheduleEntry[]>([])
+  const todayStr = today()
+
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('schedule_entries')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', weekDays[0])
+        .lte('date', weekDays[6])
+        .order('time')
+      setWeekEntries(data ?? [])
+    }
+    load()
+  }, [weekDays[0], weekDays[6]])
+
+  return (
+    <div>
+      {/* Day headers */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '48px repeat(7, 1fr)',
+        borderBottom: '1px solid var(--border-default)',
+        paddingBottom: 10,
+        marginBottom: 0,
+        position: 'sticky',
+        top: -20,
+        background: 'var(--bg-surface)',
+        zIndex: 2,
+      }}>
+        <div />
+        {weekDays.map((day, i) => {
+          const isToday = day === todayStr
+          return (
+            <div key={day} style={{ textAlign: 'center', padding: '0 2px' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{dayLabels[i]}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: isToday ? 'var(--accent)' : 'var(--text-primary)', marginTop: 2 }}>
+                {formatDate(day, { day: 'numeric' })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Scrollable hourly grid */}
+      <div style={{ overflowY: 'auto', maxHeight: 'calc(80vh - 140px)' }}>
+        {HOURS.map(hour => {
+          const timePrefix = `${String(hour).padStart(2, '0')}:`
+          return (
+            <div key={hour} style={{
+              display: 'grid',
+              gridTemplateColumns: '48px repeat(7, 1fr)',
+              minHeight: 52,
+              borderTop: '1px solid var(--border-subtle)',
+            }}>
+              {/* Hour label */}
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10,
+                color: 'var(--text-tertiary)', paddingTop: 6,
+                textAlign: 'right', paddingRight: 8, flexShrink: 0,
+              }}>
+                {String(hour).padStart(2, '0')}:00
+              </div>
+
+              {/* Day cells */}
+              {weekDays.map(day => {
+                const calEvs = calendarEvents.filter(ev => ev.date === day && ev.time?.startsWith(timePrefix))
+                const entries = weekEntries.filter(e => e.date === day && e.time?.startsWith(timePrefix))
+                return (
+                  <div key={day} style={{
+                    borderLeft: '1px solid var(--border-subtle)',
+                    padding: '4px 3px',
+                    minWidth: 0,
+                  }}>
+                    {calEvs.map((ev, i) => (
+                      <div key={ev.id + i} style={{
+                        fontSize: 10, fontWeight: 500, padding: '2px 5px',
+                        borderRadius: 3, marginBottom: 2,
+                        borderLeft: `2px solid ${TAG_COLORS[ev.tag] ?? 'var(--green)'}`,
+                        background: `${TAG_COLORS[ev.tag] ?? 'var(--green)'}18`,
+                        color: TAG_COLORS[ev.tag] ?? 'var(--green)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {ev.time?.slice(0, 5)} {ev.title}
+                      </div>
+                    ))}
+                    {entries.map(entry => (
+                      <div key={entry.id} style={{
+                        fontSize: 10, fontWeight: 500, padding: '2px 5px',
+                        borderRadius: 3, marginBottom: 2,
+                        borderLeft: `2px solid ${CATEGORY_COLORS[entry.category] ?? 'var(--accent)'}`,
+                        background: entry.completed ? 'var(--bg-elevated)' : 'var(--accent-muted)',
+                        color: CATEGORY_COLORS[entry.category] ?? 'var(--accent)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        textDecoration: entry.completed ? 'line-through' : 'none',
+                        opacity: entry.completed ? 0.55 : 1,
+                      }}>
+                        {entry.time.slice(0, 5)} {entry.title}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function WeeklyTasksPage() {
   const supabase = createClient()
   const { tasks, loading, addTask, toggleTask, deleteTask, updateTask } = useTasks()
@@ -372,6 +497,7 @@ export default function WeeklyTasksPage() {
 
   const [scheduleDay, setScheduleDay] = useState<string | null>(null)
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
+  const [weekScheduleOpen, setWeekScheduleOpen] = useState(false)
 
   const { start: weekStart, end: weekEnd } = getWeekRange(weekOffset)
   const weekDays = getDaysInRange(weekStart, weekEnd)
@@ -448,6 +574,29 @@ export default function WeeklyTasksPage() {
         </div>
         <WeekNav offset={weekOffset} onChange={setWeekOffset} />
       </div>
+
+      {/* Expandir horarios */}
+      <button
+        onClick={() => setWeekScheduleOpen(true)}
+        style={{
+          width: '100%',
+          padding: '14px 20px',
+          marginBottom: 20,
+          borderRadius: 'var(--radius-md)',
+          border: '1.5px dashed var(--accent)',
+          background: 'var(--accent-muted)',
+          color: 'var(--accent)',
+          cursor: 'pointer',
+          fontSize: 15,
+          fontWeight: 600,
+          letterSpacing: '0.01em',
+          transition: 'opacity 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+        onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+      >
+        Expandir horarios — ver semana completa
+      </button>
 
       {/* Días */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -575,6 +724,20 @@ export default function WeeklyTasksPage() {
             onDelete={deleteEntry}
           />
         )}
+      </Modal>
+
+      {/* Modal semana completa */}
+      <Modal
+        isOpen={weekScheduleOpen}
+        onClose={() => setWeekScheduleOpen(false)}
+        title={`Semana — ${formatDate(weekStart, { day: 'numeric', month: 'short' })} al ${formatDate(weekEnd, { day: 'numeric', month: 'short' })}`}
+        size="xl"
+      >
+        <WeekGridModal
+          weekDays={weekDays}
+          dayLabels={weekDays.map(d => formatDate(d, { weekday: 'short' }))}
+          calendarEvents={calendarEvents}
+        />
       </Modal>
     </div>
   )
