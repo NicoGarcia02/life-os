@@ -369,26 +369,54 @@ function WeekGridModal({
 }) {
   const supabase = createClient()
   const [weekEntries, setWeekEntries] = useState<ScheduleEntry[]>([])
+  const [addingTo, setAddingTo] = useState<{ day: string; hour: number } | null>(null)
+  const [addForm, setAddForm] = useState({ title: '', time: '', duration: '60', category: 'Personal' })
+  const [saving, setSaving] = useState(false)
   const todayStr = today()
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data } = await supabase
-        .from('schedule_entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('date', weekDays[0])
-        .lte('date', weekDays[6])
-        .order('time')
-      setWeekEntries(data ?? [])
-    }
-    load()
+  const loadEntries = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('schedule_entries')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('date', weekDays[0])
+      .lte('date', weekDays[6])
+      .order('time')
+    setWeekEntries(data ?? [])
   }, [weekDays[0], weekDays[6]])
 
+  useEffect(() => { loadEntries() }, [loadEntries])
+
+  function startAdd(day: string, hour: number) {
+    setAddingTo({ day, hour })
+    setAddForm({ title: '', time: `${String(hour).padStart(2, '0')}:00`, duration: '60', category: 'Personal' })
+  }
+
+  async function handleAdd() {
+    if (!addingTo || !addForm.title.trim()) return
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('schedule_entries').insert({
+        user_id: user.id,
+        date: addingTo.day,
+        time: addForm.time || `${String(addingTo.hour).padStart(2, '0')}:00`,
+        title: addForm.title.trim(),
+        duration: parseInt(addForm.duration) || 60,
+        category: addForm.category,
+        completed: false,
+      })
+    }
+    await loadEntries()
+    setAddingTo(null)
+    setAddForm({ title: '', time: '', duration: '60', category: 'Personal' })
+    setSaving(false)
+  }
+
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Day headers */}
       <div style={{
         display: 'grid',
@@ -407,8 +435,22 @@ function WeekGridModal({
           return (
             <div key={day} style={{ textAlign: 'center', padding: '0 2px' }}>
               <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{dayLabels[i]}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: isToday ? 'var(--accent)' : 'var(--text-primary)', marginTop: 2 }}>
-                {formatDate(day, { day: 'numeric' })}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: isToday ? 'var(--accent)' : 'var(--text-primary)' }}>
+                  {formatDate(day, { day: 'numeric' })}
+                </span>
+                <button
+                  onClick={() => startAdd(day, 8)}
+                  title={`Agregar al ${dayLabels[i]}`}
+                  style={{
+                    width: 16, height: 16, borderRadius: '50%', border: 'none',
+                    background: isToday ? 'var(--accent)' : 'var(--border-default)',
+                    color: isToday ? 'white' : 'var(--text-tertiary)',
+                    cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1, padding: 0, flexShrink: 0,
+                  }}
+                >+</button>
               </div>
             </div>
           )
@@ -416,7 +458,7 @@ function WeekGridModal({
       </div>
 
       {/* Scrollable hourly grid */}
-      <div style={{ overflowY: 'auto', maxHeight: 'calc(80vh - 140px)' }}>
+      <div style={{ overflowY: 'auto', maxHeight: addingTo ? 'calc(80vh - 240px)' : 'calc(80vh - 140px)' }}>
         {HOURS.map(hour => {
           const timePrefix = `${String(hour).padStart(2, '0')}:`
           return (
@@ -426,7 +468,6 @@ function WeekGridModal({
               minHeight: 52,
               borderTop: '1px solid var(--border-subtle)',
             }}>
-              {/* Hour label */}
               <div style={{
                 fontFamily: 'var(--font-mono)', fontSize: 10,
                 color: 'var(--text-tertiary)', paddingTop: 6,
@@ -435,16 +476,25 @@ function WeekGridModal({
                 {String(hour).padStart(2, '0')}:00
               </div>
 
-              {/* Day cells */}
               {weekDays.map(day => {
                 const calEvs = calendarEvents.filter(ev => ev.date === day && ev.time?.startsWith(timePrefix))
                 const entries = weekEntries.filter(e => e.date === day && e.time?.startsWith(timePrefix))
+                const isEmpty = calEvs.length === 0 && entries.length === 0
                 return (
-                  <div key={day} style={{
-                    borderLeft: '1px solid var(--border-subtle)',
-                    padding: '4px 3px',
-                    minWidth: 0,
-                  }}>
+                  <div
+                    key={day}
+                    onClick={() => isEmpty && startAdd(day, hour)}
+                    title={isEmpty ? `+ ${String(hour).padStart(2,'0')}:00` : undefined}
+                    style={{
+                      borderLeft: '1px solid var(--border-subtle)',
+                      padding: '4px 3px',
+                      minWidth: 0,
+                      cursor: isEmpty ? 'pointer' : 'default',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={e => { if (isEmpty) e.currentTarget.style.background = 'rgba(124,154,255,0.05)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '' }}
+                  >
                     {calEvs.map((ev, i) => (
                       <div key={ev.id + i} style={{
                         fontSize: 10, fontWeight: 500, padding: '2px 5px',
@@ -478,6 +528,98 @@ function WeekGridModal({
           )
         })}
       </div>
+
+      {/* Add form — appears at the bottom when a cell or "+" is clicked */}
+      {addingTo && (
+        <div style={{
+          borderTop: '1px solid var(--border-default)',
+          paddingTop: 14,
+          marginTop: 8,
+          background: 'var(--bg-surface)',
+        }}>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10, fontWeight: 500 }}>
+            Nueva actividad — {formatDate(addingTo.day, { weekday: 'long', day: 'numeric', month: 'short' })}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 160px' }}>
+              <label style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Título</label>
+              <input
+                autoFocus
+                value={addForm.title}
+                onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAddingTo(null) }}
+                placeholder="Nombre de la actividad..."
+                style={{
+                  width: '100%', padding: '7px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-default)', background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ flex: '0 0 90px' }}>
+              <label style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Inicio</label>
+              <input
+                type="time"
+                value={addForm.time}
+                onChange={e => setAddForm(p => ({ ...p, time: e.target.value }))}
+                style={{
+                  width: '100%', padding: '7px 8px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-default)', background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)', fontSize: 13,
+                }}
+              />
+            </div>
+            <div style={{ flex: '0 0 72px' }}>
+              <label style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Min</label>
+              <input
+                type="number"
+                min={5} max={480} step={5}
+                value={addForm.duration}
+                onChange={e => setAddForm(p => ({ ...p, duration: e.target.value }))}
+                style={{
+                  width: '100%', padding: '7px 8px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-default)', background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)', fontSize: 13,
+                }}
+              />
+            </div>
+            <div style={{ flex: '0 0 110px' }}>
+              <label style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Categoría</label>
+              <select
+                value={addForm.category}
+                onChange={e => setAddForm(p => ({ ...p, category: e.target.value }))}
+                style={{
+                  width: '100%', padding: '7px 8px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-default)', background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)', fontSize: 13,
+                }}
+              >
+                {SCHEDULE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+              <button
+                onClick={handleAdd}
+                disabled={saving || !addForm.title.trim()}
+                style={{
+                  padding: '7px 14px', borderRadius: 'var(--radius-sm)',
+                  border: 'none', background: 'var(--accent)', color: 'white',
+                  fontWeight: 600, fontSize: 13, cursor: saving ? 'wait' : 'pointer',
+                  opacity: !addForm.title.trim() ? 0.5 : 1,
+                }}
+              >{saving ? '...' : 'Agregar'}</button>
+              <button
+                onClick={() => setAddingTo(null)}
+                style={{
+                  padding: '7px 10px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-default)', background: 'none',
+                  color: 'var(--text-tertiary)', fontSize: 13, cursor: 'pointer',
+                }}
+              >Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
